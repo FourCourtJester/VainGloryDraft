@@ -1,9 +1,13 @@
 /**
- * Wire protocol between a room and its connections.
+ * What a screen and a room say to each other.
  *
- * Authentication happens once, at connect, from the link token: the server
- * knows which viewer a socket belongs to, so no message ever carries a claim
- * about who sent it.
+ * Who somebody is gets settled once, when they open their link, and is then
+ * remembered for as long as they stay connected. Nothing they send afterwards
+ * says who they are, so nobody can claim to be the other captain by asking
+ * nicely.
+ *
+ * A screen only ever asks for things — choose this hero, confirm, tell me where
+ * we are. It is the room that decides what actually happens.
  */
 
 import type { DraftEvent } from "../events.js";
@@ -31,18 +35,22 @@ export type ServerMessage =
       readonly t: "state";
       readonly phase: RoomPhase;
       /**
-       * The room's own clock at the moment it sent this. Clients compare it with
-       * their own to correct for skew — a viewer whose laptop is a minute fast
-       * must not see a minute less time than the captain beside them.
+       * What time the room makes it. Screens compare this against their own
+       * clock and correct for the difference, so somebody whose laptop is a
+       * minute fast does not see a minute less time than the person next to
+       * them.
        */
       readonly serverTime: number;
       readonly projection: DraftProjection;
-      /** Committed actions since the last state message. Staging never appears here. */
+      /** What has actually happened since the last update. */
       readonly events: readonly DraftEvent[];
     }
   | { readonly t: "error"; readonly error: RoomError };
 
-/** Parses untrusted client input. Anything unrecognised is a `bad_message`, never a throw. */
+/**
+ * Reads a message from a screen, keeping only the parts a screen is allowed to
+ * decide. Anything unfamiliar is turned away rather than acted on.
+ */
 export function parseClientMessage(raw: string): ClientMessage | null {
   let parsed: unknown;
   try {

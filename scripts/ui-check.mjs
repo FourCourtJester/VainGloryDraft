@@ -73,8 +73,8 @@ await wait(400);
 check("the acting captain sees their own staging", (await a.locator("button.hero.staged").count()) === 1);
 check("spectators see the active team's staging", (await spectator.locator("button.hero.staged").count()) === 1);
 check("the opposing captain does not", (await b.locator("button.hero.staged").count()) === 0);
-// A spectator is shown the staging but must not be able to click it: the
-// server would only answer not_a_captain.
+// Spectators can see what the team on the clock is considering, but must not be
+// able to join in.
 check("a spectator cannot click the staged hero", await spectator.locator("button.hero.staged").first().isDisabled());
 await shot(a, "ui-staged");
 await shot(b, "ui-opponent");
@@ -92,8 +92,8 @@ check("the ban lands for every viewer", (await spectator.locator(".team-A .bans 
 check("and the turn passes on", (await b.locator(".turn-label").textContent()).startsWith("Team B bans"));
 check("a banned hero is struck out of the pool", (await spectator.locator("button.hero.banned").count()) === 1);
 
-// Out of turn, every hero is inert: the UI never offers an action the server
-// would reject. (Clicking here would block until the turn came back around.)
+// Between turns nothing is clickable, so a captain is never offered a choice
+// that would only be refused.
 check("out of turn, the pool is not clickable", await a.locator("button.hero", { hasText: "Ringo" }).first().isDisabled());
 check("and no confirm bar is shown", (await a.locator(".confirm-bar").count()) === 0);
 

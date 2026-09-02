@@ -22,8 +22,8 @@ describe("hero data", () => {
   });
 
   it("claims verified only when every hero has a role", () => {
-    // Guards the handoff rule: never invent role data. The flag is what lets the
-    // UI offer a role filter, so it must never run ahead of the data.
+    // Roles are never guessed at. This flag is what lets captains filter by
+    // role, so it must never claim more than the roster actually knows.
     if (HERO_DATA_VERIFIED) {
       expect(heroesMissingRoles()).toEqual([]);
       expect(allRoles().length).toBeGreaterThan(0);

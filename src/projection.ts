@@ -1,14 +1,18 @@
 /**
- * Per-connection views of the room.
+ * Deciding what each person watching a draft is allowed to see.
  *
- * The room holds one authoritative state and every connection receives a
- * projection filtered by its token — never one payload broadcast to everyone.
- * The staging rule needs this anyway, so it is built in from the start.
+ * Everyone in a room is looking at the same draft, but not at the same view of
+ * it. A captain part-way through choosing has not committed to anything yet,
+ * and the opposing captain must not be able to see them deliberating — that
+ * would turn a draft into a guessing game about hesitation.
  *
- * Staging visibility: the captain on the clock sees their own staging, and
- * spectators see the active team's staging. The opposing captain does not.
- * (A captain opening the spectator link sees only what is seconds from being
- * public, so that is not treated as a leak.)
+ * So: the captain choosing sees their own selection, and spectators see the
+ * selection of whichever team is on the clock, because that team is seconds
+ * away from making it public anyway. The opposing captain sees only how many
+ * heroes have been chosen, never which.
+ *
+ * Everyone is sent their own view, worked out here, rather than one view being
+ * sent to the whole room and trimmed on arrival.
  */
 
 import { availability, currentTurn, currentTurnIndex, isComplete, legalHeroes, summarise } from "./engine.js";
@@ -21,8 +25,12 @@ export type Viewer =
 export type ConnectionStatus = "connected" | "disconnected";
 
 /**
- * Shown so the room can see what happened and decide for itself. The app never
- * acts on it: no pause, no forfeit. Show the state, don't act on it.
+ * Whether each captain is currently connected.
+ *
+ * This is shown so the room can see for itself when someone has dropped out and
+ * decide what to do about it — replay the draft, carry on, or something else
+ * the organiser judges fair. The app itself never acts on it: it does not pause,
+ * and it does not award anything to anyone.
  */
 export interface Presence {
   readonly A: ConnectionStatus;
@@ -30,7 +38,7 @@ export interface Presence {
 }
 
 export interface TurnClock {
-  /** Epoch ms the current turn started. Clients derive the countdown themselves. */
+  /** When the current turn began; each screen counts down from this itself. */
   readonly turnStartedAt: number;
   readonly perTurnMs: number;
   readonly bank: Readonly<Record<Team, number>>;
@@ -54,16 +62,17 @@ export interface DraftProjection {
   readonly picks: Readonly<Record<Team, readonly string[]>>;
   readonly bans: Readonly<Record<Team, readonly string[]>>;
   readonly heroes: readonly { readonly id: string; readonly availability: HeroAvailability }[];
-  /** Heroes this viewer may select right now. Empty unless it is their turn. */
+  /** What this person can click right now, which is nothing unless it is their turn. */
   readonly selectable: readonly string[];
-  /** Staged heroes, if this viewer is allowed to see them. */
+  /** The heroes being considered, when this person is allowed to see them. */
   readonly staged: readonly string[] | null;
-  /** Always visible: how many of the turn's slots are filled. */
+  /** How many heroes have been chosen so far this turn. Everyone can see this much. */
   readonly stagedCount: number;
   readonly presence: Presence;
   readonly clock: TurnClock | null;
 }
 
+/** Whether this person may see what the team on the clock is considering. */
 export function canSeeStaging(state: DraftState, viewer: Viewer): boolean {
   const turn = currentTurn(state);
   if (turn === null) return false;
@@ -71,6 +80,7 @@ export function canSeeStaging(state: DraftState, viewer: Viewer): boolean {
   return viewer.team === turn.team;
 }
 
+/** Builds one person's view of the draft as it stands. */
 export function project({ state, viewer, presence, clock }: ProjectionInput): DraftProjection {
   const turn = currentTurn(state);
   const summary = summarise(state);

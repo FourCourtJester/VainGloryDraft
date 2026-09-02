@@ -5,7 +5,9 @@ import { DraftRoom } from "./DraftRoom.js";
 import "./styles.css";
 
 /**
- * Two screens, so no router: `/` creates a room, `/r/:roomId?token=…` is one.
+ * There are only two screens, so which one to show is decided from the address
+ * rather than by anything more elaborate: the front page creates a draft, and a
+ * room link opens that draft.
  */
 function App(): ReturnType<typeof CreateRoom> {
   const match = /^\/r\/([A-Za-z0-9_-]+)\/?$/.exec(window.location.pathname);

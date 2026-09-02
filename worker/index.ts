@@ -1,8 +1,14 @@
 /**
- * Worker entry: creates rooms and routes connections into their Durable Object.
+ * The front door.
  *
- * A room's id is also its DO name, so every connection with the same link lands
- * in the same object — the one holding the authoritative state and clock.
+ * This is what a browser actually talks to. It makes new rooms and hands back
+ * the three links for them, serves the app itself, answers with the hero
+ * roster and the list of formats, and sends everyone who opens a room link
+ * through to the room they are looking for.
+ *
+ * A room's name is taken straight from its link, so everybody holding links to
+ * the same draft arrives at the same room — the one that holds the real draft
+ * and runs its clock.
  */
 
 import { HEROES, HERO_DATA_VERIFIED } from "../src/heroes.js";
@@ -22,7 +28,7 @@ export interface Env {
 
 interface CreateRoomRequest {
   readonly presetId?: string;
-  /** Compact notation, e.g. "Aban, Bban, Apick x2". Wins over presetId if both are given. */
+  /** A format written out by hand, used in place of a named one if both are given. */
   readonly script?: string;
   readonly mirrorPicks?: boolean;
   readonly autoFill?: "random" | "lowestIndex";
@@ -74,11 +80,11 @@ export default {
       return route === "ws" ? response : withCors(response);
     }
 
-    // Room links are client routes: hand them the SPA, which reads the room id
-    // and token from the URL itself.
+    // A room link is a page, not an API call: send back the app, which reads
+    // the room and the link token out of the address it was opened with.
     if (/^\/r\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)) {
-      // Ask for "/", not "/index.html": the asset router canonicalises the
-      // latter with a redirect, which would throw the link token away.
+      // Ask for the site's front page. Asking for the file by name would earn a
+      // redirect that drops the link token on the way.
       return env.ASSETS.fetch(new Request(new URL("/", url), request));
     }
 
@@ -86,13 +92,14 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
+/** Creates a draft and hands back the three links to share. */
 async function createRoom(request: Request, env: Env, url: URL): Promise<Response> {
   let body: CreateRoomRequest = {};
   try {
     if (request.headers.get("content-type")?.includes("application/json") === true) {
       const parsed: unknown = await request.json();
-      // A body of literal `null` parses fine and is not an object: reading a
-      // field off it would throw past this handler and answer 500.
+      // "null" is valid JSON but has no settings on it to read, so treat it the
+      // same as sending nothing at all.
       if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
         body = parsed as CreateRoomRequest;
       }

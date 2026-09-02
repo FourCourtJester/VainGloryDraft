@@ -11,6 +11,13 @@ interface Props {
   readonly onToggle: (heroId: string) => void;
 }
 
+/**
+ * The wall of heroes a captain chooses from, with a search box and a role
+ * filter for finding one among nearly sixty.
+ *
+ * Heroes that are banned or already taken are shown struck through or greyed
+ * rather than removed, so both captains can see at a glance what has gone.
+ */
 export function HeroGrid({ heroes, rolesVerified, projection, interactive, onToggle }: Props): JSX.Element {
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("all");
@@ -54,7 +61,8 @@ export function HeroGrid({ heroes, rolesVerified, projection, interactive, onTog
             ))}
           </select>
         ) : (
-          // Filtering over unverified role data would be worse than not offering it.
+          // No role filter until the roles are known to be right: one that
+          // hides the hero somebody was looking for is worse than none.
           <span className="note" title="Hero roles have not been verified yet">
             role filter unavailable
           </span>
@@ -84,9 +92,9 @@ export function HeroGrid({ heroes, rolesVerified, projection, interactive, onTog
                 aria-pressed={isStaged}
               >
                 {hero.image !== null && (
-                  // Decorative: the name beside it is the label. Icons are
-                  // absent until the roster is imported, and the tile still
-                  // reads correctly without one.
+                  // The name beside it does the naming, so the portrait is left
+                  // unlabelled. There are no portraits until a roster with them
+                  // is imported, and a hero reads perfectly well without one.
                   <img className="hero-icon" src={hero.image} alt="" loading="lazy" width={28} height={28} />
                 )}
                 <span className="hero-name">{hero.name}</span>

@@ -1,9 +1,10 @@
 /**
- * Static hero data.
+ * The heroes that can be drafted.
  *
- * Vainglory is no longer in development, so the roster is fixed and there is
- * nothing to keep in sync. The file is checked into the repo and read at build
- * time — never fetched at runtime from a site that may disappear.
+ * Vainglory is no longer being developed, so the roster will not change again
+ * and the list simply lives in this project as a file. Nothing is fetched from
+ * anywhere while a draft is running, which means no tournament is ever held up
+ * by somebody else's website being down.
  */
 
 import heroData from "../data/heroes.json" with { type: "json" };
@@ -38,16 +39,16 @@ export function getHero(id: string): Hero | undefined {
   return BY_ID.get(id);
 }
 
-/** Every hero id, in roster order. The default pool for a room. */
+/** The whole roster, which is what a room drafts from unless told otherwise. */
 export const ALL_HERO_IDS: readonly string[] = HEROES.map((hero) => hero.id);
 
 /**
- * True when every hero's role has been taken from a real source. The UI must not
- * offer role filtering while this is false — a filter over invented or partial
- * data is worse than no filter.
+ * Whether every hero's role has come from a source worth trusting.
  *
- * Attack type is optional extra and deliberately does not gate this: an export
- * that carries roles but no attack type is still trustworthy for filtering.
+ * Captains filter a wall of nearly sixty portraits by role constantly, so the
+ * filter has to be right. Until this is true the app does not offer one at all,
+ * because a filter that quietly hides the hero someone was looking for is worse
+ * than no filter.
  */
 export const HERO_DATA_VERIFIED = file.verified;
 
@@ -55,7 +56,7 @@ export function heroesMissingRoles(): readonly Hero[] {
   return HEROES.filter((hero) => hero.roles.length === 0);
 }
 
-/** Every role in the roster, sorted. Empty until roles are imported. */
+/** The roles captains can filter by, taken from the roster itself. */
 export function allRoles(): readonly string[] {
   return [...new Set(HEROES.flatMap((hero) => hero.roles))].sort();
 }

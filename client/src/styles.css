@@ -178,7 +178,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .hero.banned { opacity: 0.4; text-decoration: line-through; }
 .hero.picked-A { opacity: 0.55; border-color: var(--a); }
 .hero.picked-B { opacity: 0.55; border-color: var(--b); }
-/* Mirror picks: both teams hold this hero. */
+/* Both teams hold this hero, which some rooms allow. */
 .hero.picked-AB { opacity: 0.55; border-color: var(--muted); }
 .hero-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .hero-icon {
@@ -190,7 +190,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   flex: none;
 }
 .hero.has-icon { gap: 8px; }
-/* A banned or taken hero reads as unavailable at a glance, portrait included. */
+/* Heroes that are gone should read as gone at a glance, portraits included. */
 .hero.banned .hero-icon { filter: grayscale(1); }
 .hero.picked-A .hero-icon, .hero.picked-B .hero-icon, .hero.picked-AB .hero-icon { filter: grayscale(0.6); }
 .tag { font-size: 10px; text-transform: uppercase; color: var(--muted); }
@@ -267,13 +267,14 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 
   .board { grid-template-columns: 1fr; }
 
-  /* The pool is what a captain is actually here to use: put it first and let
-     the page scroll once, rather than making them scroll past two empty
-     rosters into a panel that scrolls on its own. */
+  /* On a phone, put the heroes first. A captain is here to choose one, and
+     should not have to scroll past two mostly empty team panels to reach them.
+     The page then scrolls as one, rather than trapping the heroes in a panel
+     that scrolls by itself. */
   .middle { order: -1; }
   .grid { max-height: none; overflow-y: visible; }
 
-  /* Rosters become compact chip rows: they are reference, not the work. */
+  /* The team panels become small rows. They are there to be glanced at. */
   .team { padding: 10px 12px; }
   .team h2 { margin-bottom: 6px; }
   .team h3 { margin: 10px 0 4px; }
@@ -281,7 +282,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   .picks li, .bans li { padding: 6px; font-size: 13px; justify-content: center; text-align: center; }
   .picks li span, .bans li span { display: none; }
   .picks li.filled, .bans li:not(.empty) { position: relative; }
-  /* Keep the auto marker: a dot is enough once the label will not fit. */
+  /* Still show which heroes the clock chose, as a dot where a word will not fit. */
   .picks li .auto, .bans li .auto {
     display: block;
     position: absolute;
@@ -301,9 +302,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   .turn-label { font-size: 16px; }
   .clock { font-size: 26px; }
 
-  /* The confirm bar follows the captain down the pool, so the pool ends above
-     where it sits — a hero permanently hidden behind it is a hero they cannot
-     ban. */
+  /* The confirm button follows the captain down the list so it is always within
+     reach. The list leaves room for it at the end, so no hero can end up stuck
+     behind it where nobody could pick it. */
   .confirm-bar {
     position: sticky;
     bottom: 8px;

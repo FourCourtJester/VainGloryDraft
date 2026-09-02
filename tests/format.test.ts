@@ -9,8 +9,8 @@ describe("clock", () => {
   });
 
   it("never rounds its way into a wrong format", () => {
-    // Regression: 9999ms chose the sub-10s branch on floor(9.999) = 9, then
-    // rounded to "10.0" — the countdown read 0:10, then 10.0.
+    // A countdown has to fall through ten seconds cleanly. Reading "0:10" and
+    // then "10.0" a moment later would look broken to a captain under pressure.
     expect(clock(9_999)).toBe("9.9");
     expect(clock(10_000)).toBe("0:10");
     expect(clock(59_999)).toBe("0:59");

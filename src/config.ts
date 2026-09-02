@@ -1,9 +1,9 @@
 /**
- * Room defaults.
+ * What a draft does when nobody says otherwise.
  *
- * Kept in one place so a decision lives in code rather than in whatever the
- * caller happened to pass. `DraftConfig` itself stays fully explicit — the
- * engine never guesses — and this is the single door rooms are created through.
+ * Every room is created through here, so the answer to "what happens if the
+ * organiser just clicks create" is written down once in this file rather than
+ * assumed separately everywhere a room is made.
  */
 
 import type { AutoFillStrategy, DraftConfig, TurnScript } from "./types.js";
@@ -14,12 +14,13 @@ export interface DraftDefaults {
 }
 
 /**
- * Mirror picks off: the common tournament rule, and a room can turn it on.
+ * Both teams may not take the same hero, which is the usual tournament rule; a
+ * room can allow it if it wants to.
  *
- * Auto-fill random: confirmed as the rule for *every* timeout, not just a
- * partially staged multi-pick turn. Lowest-index would let a captain who wants
- * the first legal hero simply stall for it; seeded random cannot be played for,
- * and is still replayable from the room log.
+ * When a captain runs out of time the app picks for them at random. Always
+ * taking the first hero on the list would be easy to plan around — a captain
+ * who wanted it could simply let the clock run — whereas a random choice is
+ * nothing worth waiting for.
  */
 export const DRAFT_DEFAULTS: DraftDefaults = {
   mirrorPicks: false,
@@ -27,15 +28,20 @@ export const DRAFT_DEFAULTS: DraftDefaults = {
 };
 
 export interface RoomOptions {
-  /** The resolved script array, never a preset id. */
+  /** The draft format itself, rather than the name of one. */
   readonly script: TurnScript;
   readonly heroPool: readonly string[];
-  /** Room seed. Must be unique per room, and stored: it is what makes auto-actions replayable. */
+  /**
+   * This room's own private number. It has to be different for every room and
+   * kept with it, because it is what lets the choices made on a captain's behalf
+   * be checked afterwards.
+   */
   readonly seed: string;
-  readonly mirrorPicks?: boolean;
-  readonly autoFill?: AutoFillStrategy;
+  readonly mirrorPicks?: boolean | undefined;
+  readonly autoFill?: AutoFillStrategy | undefined;
 }
 
+/** Fills in whatever the organiser did not choose, and hands back a full set of rules. */
 export function draftConfig(options: RoomOptions): DraftConfig {
   return {
     script: options.script,

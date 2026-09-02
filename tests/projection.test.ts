@@ -50,8 +50,8 @@ describe("staging visibility", () => {
     const staged = must(stage(clean, "A", "a")); // turn 0 is a single ban
     const opponent = view(staged, CAPTAIN_B);
     expect(opponent.staged).toBeNull();
-    // Nothing but the slot count may differ: which heroes are staged must not be
-    // inferable from the opposing captain's payload.
+    // The opposing captain may know how many heroes have been chosen, but must
+    // not be able to work out which ones from anything they are sent.
     expect({ ...opponent, stagedCount: 0 }).toEqual({ ...view(clean, CAPTAIN_B), stagedCount: 0 });
   });
 
@@ -102,7 +102,7 @@ describe("shared view", () => {
     const state = must(createDraft(CONFIG));
     const projection = view(state, SPECTATOR);
     expect(projection.presence).toEqual({ A: "connected", B: "disconnected" });
-    // A disconnect changes nothing about whose turn it is.
+    // Somebody dropping out changes nothing about whose turn it is.
     expect(projection.turn).toEqual({ team: "A", action: "ban", count: 1 });
   });
 

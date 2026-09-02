@@ -16,6 +16,14 @@ interface HeroFile {
   readonly heroes: readonly Hero[];
 }
 
+/**
+ * The draft itself: the clock, both teams' picks and bans, the hero pool, and
+ * the confirm button.
+ *
+ * This screen decides nothing about the draft. Which heroes can be clicked,
+ * whose turn it is and how much time is left are all told to it by the room, so
+ * there is no second copy of the rules here to fall out of step.
+ */
 export function DraftRoom({ roomId, token }: Props): JSX.Element {
   const room = useRoom(roomId, token);
   const [heroData, setHeroData] = useState<HeroFile | null>(null);
@@ -143,6 +151,7 @@ interface ColumnProps {
   readonly name: (id: string) => string;
 }
 
+/** One team's side of the board: their picks, in order, and their bans. */
 function TeamColumn({ team, projection, name }: ColumnProps): JSX.Element {
   const active = projection.turn?.team === team;
   const slots = projection.script
@@ -150,8 +159,8 @@ function TeamColumn({ team, projection, name }: ColumnProps): JSX.Element {
     .reduce((total, turn) => total + turn.count, 0);
   const picks = projection.picks[team];
 
-  // A hero the clock chose must never look like one a captain chose: the
-  // handoff asks for auto-actions to be visible so nobody can argue them.
+  // Mark heroes the clock chose. A hero nobody picked on purpose must never
+  // look like one that was, or there is an argument waiting to happen.
   const auto = new Set(projection.committed.filter((entry) => entry.auto).flatMap((entry) => [...entry.heroes]));
   const label = (id: string): JSX.Element => (
     <>

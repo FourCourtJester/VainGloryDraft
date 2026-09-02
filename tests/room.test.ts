@@ -304,7 +304,7 @@ describe("option validation", () => {
   });
 
   it("refuses values that would break the clock", () => {
-    // A NaN or a negative deadline reaches the alarm, where it is unrecoverable.
+    // A nonsensical turn length would become the clock everyone plays against.
     for (const bad of [Number.NaN, Infinity, -1, 0, "30000", true, {}]) {
       expect(parseTimerRules(bad, undefined).problems.length).toBeGreaterThan(0);
     }
@@ -324,10 +324,10 @@ describe("option validation", () => {
 });
 
 describe("a command that changes nothing must not swallow the clock", () => {
-  // Regression: `command` runs the clock before the permission checks, so a
-  // rejected message can carry a turn the clock just resolved. If that outcome
-  // reports `changed: false`, the host skips persisting, broadcasting and
-  // re-arming the alarm — and the room silently stalls.
+  // A room checks the clock before it checks whether a request is allowed, so a
+  // request it is about to turn down may still have carried a turn past its
+  // time limit on the way in. That turn really happened, and the room has to
+  // hear about it, or the draft quietly stops with nothing left to restart it.
   it("reports the tick's changes even when the sender is a spectator", () => {
     const room = liveRoom();
     const deadline = room.alarmAt()!;
@@ -340,7 +340,7 @@ describe("a command that changes nothing must not swallow the clock", () => {
 
   it("reports them when the draft finished on that same tick", () => {
     const room = liveRoom();
-    // Run the clock out entirely, leaving the last turn to expire.
+    // Let every turn run out, including the last one.
     let at = T0;
     while (room.phase === "drafting" && room.alarmAt() !== null) {
       at = room.alarmAt()! + 1;

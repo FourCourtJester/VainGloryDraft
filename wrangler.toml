@@ -2,8 +2,8 @@ name = "vainglory-draft"
 main = "worker/index.ts"
 compatibility_date = "2025-01-01"
 
-# The SPA. Static files are served straight from here; anything that is not a
-# file — /api/* and the /r/:roomId room links — falls through to the Worker.
+# The app's own files - pages, styles, hero portraits. Anything that is not one
+# of those, such as a room link or an API call, is passed on to the worker.
 [assets]
 directory = "./client/dist"
 binding = "ASSETS"

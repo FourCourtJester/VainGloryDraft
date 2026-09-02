@@ -2,8 +2,11 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 /**
- * The client is a plain SPA: a room is entirely live state, so there is nothing
- * to server-render. In dev it proxies to `wrangler dev`, which owns the rooms.
+ * Builds the app the browser runs.
+ *
+ * Everything on screen comes from the room as the draft happens, so there is
+ * nothing to prepare in advance on a server. While developing, requests for
+ * rooms are passed through to the worker running alongside.
  */
 export default defineConfig({
   plugins: [react()],

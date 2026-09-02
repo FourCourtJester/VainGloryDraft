@@ -1,12 +1,19 @@
 /**
- * A draft room: engine + clock + tokens + connections.
+ * A draft room: the draft itself, the clock, the three links, and whoever is
+ * currently connected.
  *
- * This is where the authoritative state lives. It is deliberately free of any
- * Cloudflare import — the Durable Object is a thin adapter that supplies
- * sockets, storage and alarms, and everything decidable is decided here, against
- * an injected `now` so it can be tested at any speed.
+ * This is the version of a draft that counts. Screens show what a room tells
+ * them and ask it for things; if a screen and this room ever disagree, the room
+ * is right. Every question with an answer — whose turn it is, what happens when
+ * the clock runs out, when the draft may begin, who is allowed to see what — is
+ * settled here.
+ *
+ * A room is told what time it is rather than looking it up, which is what allows
+ * a whole tournament's worth of drafts, including clocks running out, to be
+ * played through in a fraction of a second when testing.
  */
 
+import { draftConfig } from "../config.js";
 import { commit, createDraft, currentTurn, isComplete, resolveTimeout, stage, unstage } from "../engine.js";
 import type { DraftEvent } from "../events.js";
 import { diffEvents } from "../events.js";
@@ -21,6 +28,7 @@ import type { ClientMessage, RoomError, RoomPhase } from "./protocol.js";
 import type { RoomTokens } from "./tokens.js";
 import { generateRoomTokens, generateToken, tokensMatch } from "./tokens.js";
 
+/** Thirty seconds a turn, with a minute of reserve each for the whole draft. */
 export const DEFAULT_TIMER_RULES: TimerRules = { perTurnMs: 30_000, bankMs: 60_000 };
 
 export interface CreateRoomOptions {
@@ -34,7 +42,10 @@ export interface CreateRoomOptions {
   readonly tokens?: RoomTokens;
 }
 
-/** Everything the room needs to be rebuilt from storage. */
+/**
+ * Everything about a room worth keeping, so that one interrupted half-way
+ * through can be picked up again exactly where it was.
+ */
 export interface RoomSnapshot {
   readonly version: 1;
   readonly roomId: string;
@@ -47,23 +58,27 @@ export interface RoomSnapshot {
 }
 
 export interface RoomOutcome {
-  /** Committed actions this call produced. Safe to broadcast: staging never appears. */
+  /** What happened, for telling the room and anything else that is listening. */
   readonly events: readonly DraftEvent[];
-  /** Set when the caller's own command was rejected. Goes back to that caller only. */
+  /**
+   * Why this particular request was refused. Only the person who made it is
+   * told; nobody else in the room needs to see somebody's misclick.
+   */
   readonly error: RoomError | null;
-  /** True when anything a viewer can see changed, so the room should re-broadcast. */
+  /** Whether anything changed that people should be shown. */
   readonly changed: boolean;
 }
 
 const NOTHING: RoomOutcome = { events: [], error: null, changed: false };
 
 /**
- * A refusal, carrying whatever the clock did on the way in.
+ * Turns a request down, while still reporting anything the clock did in the
+ * meantime.
  *
- * `command` runs the clock before it checks permissions, so a rejected message
- * can still arrive holding a turn the clock has just resolved. Reporting
- * `changed: false` there would tell the host there is nothing to persist,
- * broadcast or re-arm — and the room would stall with its alarm already spent.
+ * Checking the clock is the first thing a room does with any request, so a
+ * request that is about to be refused may still have carried a turn over the
+ * time limit on its way in. That turn genuinely happened and the room has to
+ * hear about it, even though the request that revealed it goes no further.
  */
 function refuse(code: RoomError["code"], message: string, ticked: RoomOutcome): RoomOutcome {
   return { events: ticked.events, error: { code, message }, changed: ticked.changed };
@@ -71,22 +86,24 @@ function refuse(code: RoomError["code"], message: string, ticked: RoomOutcome): 
 
 export class Room {
   #snapshot: RoomSnapshot;
-  /** Live connections. Not persisted: a hibernated room has no opinion about sockets. */
+  /** Who is connected right now. Forgotten when a room is put away and rebuilt on waking. */
   #connections = new Map<string, Viewer>();
 
   constructor(snapshot: RoomSnapshot) {
     this.#snapshot = snapshot;
   }
 
+  /** Sets up a new room: a format to play, a roster to draft from, and three links. */
   static create(options: CreateRoomOptions, now: number): RoomSnapshot {
-    const script = options.script ?? defaultScript();
-    const draft = createDraft({
-      script,
-      heroPool: options.heroPool ?? ALL_HERO_IDS,
-      mirrorPicks: options.mirrorPicks ?? false,
-      autoFill: options.autoFill ?? "random",
-      seed: options.seed ?? generateToken(12),
-    });
+    const draft = createDraft(
+      draftConfig({
+        script: options.script ?? defaultScript(),
+        heroPool: options.heroPool ?? ALL_HERO_IDS,
+        seed: options.seed ?? generateToken(12),
+        mirrorPicks: options.mirrorPicks,
+        autoFill: options.autoFill,
+      }),
+    );
     if (!draft.ok) throw new Error(`Cannot create room: ${draft.error.message}`);
 
     const rules = options.rules ?? DEFAULT_TIMER_RULES;
@@ -110,7 +127,7 @@ export class Room {
     return this.#snapshot.phase;
   }
 
-  /** Which viewer a link token belongs to, or `null` if it belongs to none. */
+  /** Works out who somebody is from the link they arrived with. */
   authenticate(token: string): Viewer | null {
     const { tokens } = this.#snapshot;
     if (tokensMatch(token, tokens.A)) return { role: "captain", team: "A" };
@@ -120,8 +137,11 @@ export class Room {
   }
 
   /**
-   * Register a connection. Tokens are reusable, so the same captain may hold
-   * several — a laptop and a phone both count as present.
+   * Notes that somebody has joined.
+   *
+   * The same person may be connected more than once — a captain with the draft
+   * open on a laptop and a phone is still one captain, and still counts as
+   * present until the last of their screens goes away.
    */
   attach(connectionId: string, viewer: Viewer, now: number): RoomOutcome {
     this.#connections.set(connectionId, viewer);
@@ -130,9 +150,9 @@ export class Room {
 
   detach(connectionId: string, now: number): RoomOutcome {
     if (!this.#connections.delete(connectionId)) return NOTHING;
-    // The clock does not care that someone left. Presence changed, so the room
-    // re-broadcasts — showing the state is the whole of its response to a
-    // disconnect. No pause, by decision.
+    // Losing someone changes nothing about the draft itself. The room shows that
+    // they have gone and carries on; deciding what to do about it belongs to the
+    // people running the tournament, not to the app.
     const overdue = this.tick(now);
     return { events: overdue.events, error: null, changed: true };
   }
@@ -145,11 +165,13 @@ export class Room {
     return { A: teams.has("A") ? "connected" : "disconnected", B: teams.has("B") ? "connected" : "disconnected" };
   }
 
-  connectionCount(): number {
-    return this.#connections.size;
-  }
-
-  /** The draft starts once both captains have arrived, and never before. */
+  /**
+   * Starts the draft once both captains are actually there.
+   *
+   * Nobody's time should tick away while they are still finding their link, so a
+   * room waits, however long that takes, and starts the clock only when both
+   * captains are present to play against it.
+   */
   #maybeStart(now: number): RoomOutcome {
     if (this.#snapshot.phase !== "lobby") return { events: [], error: null, changed: true };
     const presence = this.presence();
@@ -160,11 +182,12 @@ export class Room {
     return { events: [], error: null, changed: true };
   }
 
+  /** Handles a request from somebody in the room, and decides what it changes. */
   command(viewer: Viewer, message: ClientMessage, now: number): RoomOutcome {
     if (message.t === "resync") return { events: [], error: null, changed: true };
 
-    // Resolve any turn whose clock ran out before this command landed, so a late
-    // click can never beat an expiry that already happened.
+    // Settle any turn whose time ran out before this arrived. A click that lands
+    // a moment too late must not be allowed to beat the clock.
     const overdue = this.tick(now);
 
     if (viewer.role !== "captain") {
@@ -197,9 +220,14 @@ export class Room {
   }
 
   /**
-   * Resolve every turn whose deadline has passed. Loops because an alarm can
-   * fire late — an evicted room waking up two turns behind must resolve both,
-   * each at its own deadline rather than all at `now`, or the timeline lies.
+   * Brings the draft up to date with the clock, settling every turn whose time
+   * has run out.
+   *
+   * Usually that is one turn, or none at all. But a room that was asleep or
+   * unreachable for a while can wake to find several turns' worth of time gone,
+   * and each of those turns is settled at the moment it actually expired rather
+   * than all at once on waking. The finished draft then reads the same as it
+   * would have if somebody had been watching the whole way through.
    */
   tick(now: number): RoomOutcome {
     if (this.#snapshot.phase !== "drafting") return NOTHING;
@@ -223,7 +251,7 @@ export class Room {
     return { events: diffEvents(before, this.#snapshot.draft), error: null, changed: true };
   }
 
-  /** Apply a new draft state, charging the clock when a turn actually ended. */
+  /** Takes the draft forward, charging the clock when a turn has genuinely ended. */
   #advance(draft: DraftState, turnEndedAt: number | null): void {
     let timer = this.#snapshot.timer;
     if (turnEndedAt !== null) {
@@ -238,7 +266,10 @@ export class Room {
     };
   }
 
-  /** When the host should wake the room next, or `null` if no clock is running. */
+  /**
+   * When this room next needs waking, so that a turn can run out even with
+   * nobody watching. Nothing to wake for when no clock is running.
+   */
   alarmAt(): number | null {
     if (this.#snapshot.phase !== "drafting") return null;
     const turn = currentTurn(this.#snapshot.draft);
@@ -268,7 +299,7 @@ export class Room {
     });
   }
 
-  /** Every live connection with the view it should receive. */
+  /** Everyone currently connected, each with the view of the draft they are allowed. */
   *audience(now: number): Generator<{ connectionId: string; viewer: Viewer; projection: DraftProjection }> {
     for (const [connectionId, viewer] of this.#connections) {
       yield { connectionId, viewer, projection: this.projection(viewer, now) };

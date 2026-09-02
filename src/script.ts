@@ -1,9 +1,11 @@
 /**
- * Turn script helpers: validation and *derived* totals.
+ * Working with a draft format: reading one, writing one down, checking it makes
+ * sense, and counting up what it asks of each team.
  *
- * Nothing here may assume a format. "Each team ends with 5 picks" is not a rule,
- * it is an outcome of one particular script — hardcoding it breaks 3v3 and every
- * custom order.
+ * Everything here is worked out from the format itself. How many heroes a team
+ * ends up with is simply however many its turns add up to, so a 3v3, a 5v5 and
+ * a format a tournament invents next month are all handled without the code
+ * needing to know which is which.
  */
 
 import type { Action, Team, Turn, TurnScript } from "./types.js";
@@ -15,16 +17,19 @@ export interface TeamTotals {
 
 export interface ScriptTotals {
   readonly turns: number;
-  /** Total hero selections across the whole script. */
+  /** How many heroes get chosen across the whole draft, by both teams together. */
   readonly selections: number;
   readonly byTeam: Readonly<Record<Team, TeamTotals>>;
   /**
-   * Distinct heroes the pool must hold for the script to be completable.
-   * With mirror picks the two teams may overlap, so only the larger pick load counts.
+   * The smallest roster this format could be run with.
+   *
+   * When both teams are allowed the same hero, fewer heroes are needed overall,
+   * because the two sides' picks can overlap.
    */
   readonly minimumPool: { readonly mirrorOff: number; readonly mirrorOn: number };
 }
 
+/** Adds up what a format asks of each team: how many picks, how many bans. */
 export function deriveTotals(script: TurnScript): ScriptTotals {
   const byTeam: Record<Team, { picks: number; bans: number }> = {
     A: { picks: 0, bans: 0 },
@@ -58,8 +63,11 @@ export interface ScriptProblem {
 }
 
 /**
- * Structural validation only. An asymmetric script is legal — some formats are
- * deliberately lopsided — so imbalance is not reported here.
+ * Checks a format is something that could actually be played: it has turns, each
+ * belongs to a real team, and each asks for at least one hero.
+ *
+ * A format that treats the two teams differently is perfectly allowed, since
+ * some deliberately do, so nothing here complains about that.
  */
 export function validateScript(script: TurnScript): readonly ScriptProblem[] {
   const problems: ScriptProblem[] = [];
@@ -83,7 +91,10 @@ export function validateScript(script: TurnScript): readonly ScriptProblem[] {
   return problems;
 }
 
-/** True when the script is structurally sound and the pool is large enough. */
+/**
+ * Checks a format can be played with a particular set of heroes — that it makes
+ * sense, and that there are enough heroes to go round before anyone runs out.
+ */
 export function canRun(script: TurnScript, poolSize: number, mirrorPicks: boolean): readonly ScriptProblem[] {
   const problems = [...validateScript(script)];
   if (problems.length > 0) return problems;
@@ -99,17 +110,18 @@ export function canRun(script: TurnScript, poolSize: number, mirrorPicks: boolea
   return problems;
 }
 
-/**
- * Shorthand for authoring scripts by hand or from a preset table.
- * `t("A", "ban")`, `t("B", "pick", 2)`.
- */
+/** Shorthand for writing a single turn out by hand. */
 export function t(team: Team, action: Action, count = 1): Turn {
   return { team, action, count };
 }
 
 /**
- * Compact notation for a script, handy in tests, logs and preset files:
- * "Aban, Bban, Apick x2" -> [{A,ban,1},{B,ban,1},{A,pick,2}]
+ * Reads a format written in shorthand, so a whole draft order can be set down on
+ * one line instead of as a page of objects:
+ *
+ *     "Aban, Bban, Apick x2"
+ *
+ * means team A bans, then team B bans, then team A picks two heroes together.
  */
 export function parseScript(notation: string): TurnScript {
   return notation
@@ -126,6 +138,7 @@ export function parseScript(notation: string): TurnScript {
     });
 }
 
+/** Writes a format back out in that same shorthand, for logs and preset lists. */
 export function formatScript(script: TurnScript): string {
   return script.map((turn) => `${turn.team}${turn.action}${turn.count > 1 ? ` x${turn.count}` : ""}`).join(", ");
 }

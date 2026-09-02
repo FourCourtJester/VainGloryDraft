@@ -192,9 +192,8 @@ describe("legality", () => {
   });
 
   it("still refuses a repeat after the other team has mirrored it", () => {
-    // Regression: availability used to report only the *first* team to pick a
-    // hero, so once B mirrored A's pick, B's own claim on it disappeared and B
-    // could pick the same hero again.
+    // When both teams are allowed the same hero, each team's own claim on it has
+    // to be remembered separately, or a team could end up with it twice.
     let state = start({ script: parseScript("Apick, Bpick, Apick, Bpick"), mirrorPicks: true });
     state = play(state, "a"); // A picks a
     state = play(state, "a"); // B mirrors a

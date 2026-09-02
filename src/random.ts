@@ -1,28 +1,28 @@
 /**
- * Deterministic RNG for auto-actions.
+ * The dice the app rolls when it has to choose a hero for a captain who ran out
+ * of time.
  *
- * A timeout auto-pick has to be defensible after the fact — "the app rolled a
- * dice you cannot inspect" loses arguments. Seeding from the room seed plus the
- * turn index means anyone holding the room log can replay the same draw.
+ * Two things are being balanced here. A team who loses a hero to the clock will
+ * want to know the app did not simply invent something, so every roll can be
+ * repeated later by whoever runs the tournament and shown to have been fair.
+ * At the same time, no captain should be able to sit and work out what the next
+ * timeout will hand their opponent, so the rolls cannot be predicted in advance
+ * by anyone watching the draft.
  *
- * Determinism is not the same as predictability, and the difference matters
- * here: the room seed never leaves the server, so replaying a draw needs the
- * log *and* the seed. That only holds if the seed cannot be recovered from the
- * draws themselves, which is why the generator carries a 128-bit state seeded
- * by four independent passes rather than one 32-bit digest. A single 32-bit
- * hash would be brute-forceable from a handful of observed auto-picks, and —
- * because the turn index is appended to the seed — recovering one turn's state
- * would have given up every other turn's too.
+ * Both hold because the number a room rolls from is kept on the server and
+ * never shown to anyone: a roll can be checked afterwards by someone who has
+ * that number, and guessed by nobody who does not.
  */
 
-/** FNV-1a, 32-bit, salted so each pass over the same string is independent. */
+/** Turns text into a number, differently each time the salt changes. */
 function hash(input: string, salt: number): number {
   let h = (0x811c9dc5 ^ salt) >>> 0;
   for (let i = 0; i < input.length; i++) {
     h ^= input.charCodeAt(i);
     h = Math.imul(h, 0x01000193);
   }
-  // A final avalanche, so a one-character change does not leave a visible trail.
+  // Scramble the result thoroughly, so two rooms with near-identical names do
+  // not end up with near-identical dice.
   h ^= h >>> 16;
   h = Math.imul(h, 0x7feb352d);
   h ^= h >>> 15;
@@ -31,9 +31,9 @@ function hash(input: string, salt: number): number {
 }
 
 /**
- * sfc32 — small, fast, 128 bits of state, and identical across every JS runtime,
- * which is what keeps a draw replayable on a machine that is not the one that
- * made it.
+ * Builds the dice for one particular roll. Feeding in the same text always gives
+ * back the same sequence of numbers, on any machine, which is what allows a
+ * draft to be replayed and checked long after it finished.
  */
 export function seededRandom(seed: string): () => number {
   let a = hash(seed, 0x9e3779b9);
@@ -56,12 +56,15 @@ export function seededRandom(seed: string): () => number {
     return (t >>> 0) / 4294967296;
   };
 
-  // Discard the first draws so the output does not expose the raw seed words.
+  // Throw away the first few rolls, which sit too close to the starting number.
   for (let i = 0; i < 12; i++) next();
   return next;
 }
 
-/** Draws `count` distinct items from `items` without mutating it. */
+/**
+ * Picks a number of different heroes at random from those still available,
+ * never the same one twice, and leaves the list it was given untouched.
+ */
 export function drawDistinct<T>(items: readonly T[], count: number, random: () => number): T[] {
   const pool = [...items];
   const drawn: T[] = [];

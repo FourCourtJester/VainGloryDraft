@@ -81,9 +81,10 @@ describe("presets", () => {
   });
 
   it("keeps each pick as its own turn, so a double pick is two confirms", () => {
-    // The supplied order snakes (…B, B…). Written as separate turns of one, a
-    // team picking twice in a row gets two clocks. Collapsing them into a
-    // `count: 2` turn would be one clock and one confirm — a different game.
+    // The order snakes, so a team sometimes picks twice in a row. Written as two
+    // separate turns, they get a fresh clock and a separate confirm for each.
+    // Treating the pair as one turn would give them a single clock for both,
+    // which is a materially different game and not what was asked for.
     expect(resolveScript("vg-5v5-standard").every((turn) => turn.count === 1)).toBe(true);
   });
 
@@ -93,7 +94,8 @@ describe("presets", () => {
   });
 
   it("ships only confirmed formats", () => {
-    // A placeholder must never be offered to a tournament as "standard".
+    // A format nobody has confirmed must never be offered to a tournament as
+    // the standard one.
     expect(PRESETS.every((preset) => preset.official)).toBe(true);
   });
 

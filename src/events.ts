@@ -1,9 +1,15 @@
 /**
- * The extensibility hook.
+ * Announcements about what just happened in a draft: a hero banned, a hero
+ * picked, a new team on the clock, a finished draft.
  *
- * The engine does not know this file exists. State goes in, events come out, and
- * consumers — a stats panel, a broadcast overlay, an outbound webhook — subscribe
- * here. Adding one is never surgery on the engine.
+ * This is how anything else in the world finds out about a draft without
+ * needing to understand how drafting works. A panel showing statistics for a
+ * hero the moment it is picked, a scoreboard for a stream, a message posted to
+ * a tournament's chat — each of those listens here, and none of them requires
+ * the draft rules to be touched.
+ *
+ * Only confirmed actions are announced. A captain hovering over a hero, or
+ * choosing one and changing their mind, is nobody else's business.
  */
 
 import { currentTurn, currentTurnIndex, isComplete, picksOf, bansOf } from "./engine.js";
@@ -34,9 +40,12 @@ export type DraftEvent =
 export type DraftEventType = DraftEvent["type"];
 
 /**
- * Events implied by moving from `prev` to `next`. Derived by comparison rather
- * than emitted from inside the engine, so a state restored from storage produces
- * the same stream as one built live.
+ * Says what happened between one moment of a draft and the next, by comparing
+ * the two.
+ *
+ * Working it out by comparison means a draft picked back up from storage
+ * announces exactly what a draft running without interruption would have, so
+ * anything listening cannot tell the difference and never misses an event.
  */
 export function diffEvents(prev: DraftState, next: DraftState): readonly DraftEvent[] {
   const events: DraftEvent[] = [];
@@ -70,7 +79,13 @@ export function diffEvents(prev: DraftState, next: DraftState): readonly DraftEv
 
 export type DraftEventHandler = (event: DraftEvent) => void;
 
-/** Minimal pub/sub. A throwing subscriber must not take down the draft. */
+/**
+ * Keeps the list of things listening for draft announcements and passes each one
+ * along.
+ *
+ * A listener that breaks is not allowed to disturb the draft — an outside site
+ * being slow or down should never be the reason a tournament stops.
+ */
 export class DraftEventBus {
   #handlers = new Set<DraftEventHandler>();
   #onError: (error: unknown, event: DraftEvent) => void;
@@ -84,7 +99,7 @@ export class DraftEventBus {
     return () => this.#handlers.delete(handler);
   }
 
-  /** Subscribe to one kind of event only. */
+  /** Listen for just one kind of announcement, such as picks but not bans. */
   on<T extends DraftEventType>(type: T, handler: (event: Extract<DraftEvent, { type: T }>) => void): () => void {
     return this.subscribe((event) => {
       if (event.type === type) handler(event as Extract<DraftEvent, { type: T }>);
@@ -97,6 +112,7 @@ export class DraftEventBus {
         try {
           handler(event);
         } catch (error) {
+          // A broken listener is reported and then ignored; the draft carries on.
           this.#onError(error, event);
         }
       }

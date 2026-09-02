@@ -1,16 +1,17 @@
 /**
- * Validation for room options that arrive over the wire.
+ * Checking the settings an organiser sends when creating a room.
  *
- * The engine trusts its `DraftConfig`, so something has to stop a hand-written
- * request reaching it. A negative turn length or a NaN would otherwise be stored
- * on the room and handed to the alarm, where it is no longer recoverable.
+ * The rest of the app takes a room's settings at face value, so nonsense has to
+ * be turned away here. A turn length of minus five seconds, or of no number at
+ * all, would otherwise be saved onto the room and become the clock everyone
+ * plays against, with no way back.
  */
 
 import type { AutoFillStrategy } from "../types.js";
 import type { TimerRules } from "../timer.js";
 import { DEFAULT_TIMER_RULES } from "./room.js";
 
-/** A turn shorter than this cannot be played; longer than a day is not a draft. */
+/** Nobody can play a turn shorter than a second, and an hour is already generous. */
 export const TURN_BOUNDS = { minMs: 1_000, maxMs: 60 * 60_000 };
 export const BANK_BOUNDS = { minMs: 0, maxMs: 24 * 60 * 60_000 };
 

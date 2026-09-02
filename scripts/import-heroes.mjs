@@ -105,7 +105,8 @@ if (!flag("keep-urls") && !flag("dry-run")) {
       const body = Buffer.from(await response.arrayBuffer());
       const type = response.headers.get("content-type") ?? "";
       const ext = type.includes("png") ? "png" : type.includes("webp") ? "webp" : type.includes("svg") ? "svg" : "jpg";
-      // Content-hash the name so a re-import cannot leave a stale cached icon.
+      // Name each portrait after its contents, so a re-import never leaves an
+      // old picture cached in someone's browser under a name it still trusts.
       const tag = createHash("sha256").update(body).digest("hex").slice(0, 8);
       const file = `${hero.id}-${tag}.${ext}`;
       await writeFile(path.join(ICON_DIR, file), body);
@@ -122,8 +123,9 @@ const withRoles = heroes.filter((hero) => hero.roles.length > 0).length;
 const withIcons = heroes.filter((hero) => hero.image !== null).length;
 
 const document = {
-  // Verified means the roles can be trusted enough to filter by. Attack type is
-  // optional extra and does not gate anything.
+  // The roster only counts as verified when every hero has a role, since that
+  // is what captains filter by. Melee or ranged is a nice extra and gates
+  // nothing.
   verified: withRoles === heroes.length,
   note:
     withRoles === heroes.length

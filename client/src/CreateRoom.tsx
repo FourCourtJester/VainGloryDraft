@@ -21,6 +21,10 @@ interface Created {
   readonly links: { readonly captainA: string; readonly captainB: string; readonly spectator: string };
 }
 
+/**
+ * The screen an organiser starts from: choose a format and the clock, create the
+ * room, and get back the three links to hand out.
+ */
 export function CreateRoom(): JSX.Element {
   const [presets, setPresets] = useState<readonly PresetSummary[]>([]);
   const [pending, setPending] = useState<readonly Pending[]>([]);
@@ -152,6 +156,7 @@ export function CreateRoom(): JSX.Element {
   );
 }
 
+/** One link, with a button to copy it, ready to paste to a captain. */
 function LinkRow({ label, href }: { readonly label: string; readonly href: string }): JSX.Element {
   const [copied, setCopied] = useState(false);
   return (

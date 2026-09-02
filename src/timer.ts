@@ -1,45 +1,52 @@
 /**
- * Turn clock: per-turn time plus a reserve bank per team.
+ * The clock a captain plays against.
  *
- * Compute, never count down. State is `turnStartedAt` and the bank; everything
- * else is a pure function of those and `now`. Reconnect replays the same
- * computation, so drift cannot accumulate.
+ * Each turn comes with its own allowance of time. A captain who needs longer
+ * than that starts eating into a reserve that belongs to them for the whole
+ * draft, so thinking hard about one difficult ban costs them later rather than
+ * stopping the game.
  *
- * There is no pause. A disconnect burns the clock like any other silence — that
- * is a deliberate product decision, and it is why no pause state exists here to
- * reconcile.
+ * The clock is never counted down. All that is remembered is when the turn
+ * began and how much reserve each team has left, and the time remaining is
+ * worked out from those whenever anyone asks. A captain who drops out and comes
+ * back sees exactly the same clock as everyone else, because it was never
+ * running separately on their screen in the first place.
+ *
+ * There is no pause. If a captain disappears their time keeps running, which is
+ * a decision about how tournaments should work rather than a limitation.
  */
 
 import type { Team } from "./types.js";
 
 export interface TimerRules {
-  /** Fresh time granted at the start of every turn. */
+  /** How long each turn gets before the team starts spending its reserve. */
   readonly perTurnMs: number;
-  /** Reserve each team starts with, drawn on only after the per-turn time runs out. */
+  /** How much extra time each team has for the whole draft, to spend as they like. */
   readonly bankMs: number;
 }
 
 export interface TimerState {
-  /** Epoch ms at which the current turn's clock started. */
+  /** When the current turn began. */
   readonly turnStartedAt: number;
   readonly bank: Readonly<Record<Team, number>>;
 }
 
 export interface TimerReading {
   readonly elapsedMs: number;
-  /** Per-turn time left. Hits 0 before the bank is touched. */
+  /** Time left in this turn's own allowance, before the reserve is touched. */
   readonly turnRemainingMs: number;
-  /** What the bank would hold if the turn ended now. */
+  /** Reserve the team would have left if they finished the turn now. */
   readonly bankRemainingMs: number;
-  /** turnRemainingMs + bankRemainingMs — what a captain actually has left. */
+  /** Everything the captain still has, this turn's time and reserve together. */
   readonly totalRemainingMs: number;
-  /** Epoch ms at which the auto-action fires. */
+  /** The moment the app will choose for them if they have not confirmed. */
   readonly expiresAt: number;
   readonly expired: boolean;
-  /** True once the per-turn time is gone and the bank is draining. */
+  /** True once this turn's own time is gone and the team is into its reserve. */
   readonly onBank: boolean;
 }
 
+/** Starts the clock for a new draft, with both teams' reserves untouched. */
 export function startTimer(rules: TimerRules, now: number): TimerState {
   return { turnStartedAt: now, bank: { A: rules.bankMs, B: rules.bankMs } };
 }
@@ -48,6 +55,10 @@ export function startTurn(timer: TimerState, now: number): TimerState {
   return { ...timer, turnStartedAt: now };
 }
 
+/**
+ * Works out where a team's clock stands at a given moment: what is left of this
+ * turn, what is left of their reserve, and whether their time is up.
+ */
 export function read(rules: TimerRules, timer: TimerState, team: Team, now: number): TimerReading {
   const bank = timer.bank[team];
   const elapsedMs = Math.max(0, now - timer.turnStartedAt);
@@ -67,7 +78,10 @@ export function read(rules: TimerRules, timer: TimerState, team: Team, now: numb
   };
 }
 
-/** Charge the acting team for the turn that just ended and start the next one. */
+/**
+ * Ends a turn: takes any overrun out of that team's reserve and starts the next
+ * turn's allowance running.
+ */
 export function settleTurn(
   rules: TimerRules,
   timer: TimerState,
@@ -78,7 +92,10 @@ export function settleTurn(
   return { turnStartedAt: now, bank: { ...timer.bank, [team]: bankRemainingMs } };
 }
 
-/** When the host should set its next alarm. */
+/**
+ * The moment this turn runs out, so the room can arrange to wake itself up and
+ * choose on the captain's behalf even if nobody is watching.
+ */
 export function nextAlarmAt(rules: TimerRules, timer: TimerState, team: Team): number {
   return timer.turnStartedAt + rules.perTurnMs + timer.bank[team];
 }

@@ -1,14 +1,15 @@
 /**
- * Named turn scripts.
+ * The draft formats an organiser can choose from when creating a room.
  *
- * A room stores the *resolved array*, never the preset id: a draft in progress
- * must not change because someone edited a preset afterwards.
+ * A room keeps a copy of the format it was created with, rather than a
+ * reference to the entry in this file. A draft already under way therefore keeps
+ * the order both captains agreed to, even if somebody edits the format here
+ * while it is being played.
  *
- * `vg-5v5-standard` is the default. `vg-3v3-standard` is the same shape with the
- * pick snake cut short at three a side. See docs/PRESETS.md.
+ * See docs/PRESETS.md for how to add another one.
  */
 
-import { formatScript, parseScript } from "./script.js";
+import { parseScript } from "./script.js";
 import type { TurnScript } from "./types.js";
 
 export type DraftFormat = "5v5" | "3v3" | "custom";
@@ -18,16 +19,20 @@ export interface Preset {
   readonly name: string;
   readonly format: DraftFormat;
   /**
-   * True only for a script confirmed against the real in-game order. Anything
-   * false is a placeholder for development and must not be offered to a
-   * tournament as "standard".
+   * Whether this order has been confirmed as the one really used in game.
+   * Anything unconfirmed must never be offered to a tournament as standard.
    */
   readonly official: boolean;
   readonly script: TurnScript;
   readonly notes?: string;
 }
 
-/** Preset ids that are known to be needed but cannot be written yet. */
+/**
+ * Formats we know are wanted but do not yet know the running order for.
+ *
+ * They are listed rather than guessed at. A draft tool that quietly runs the
+ * wrong order is worse than one that admits it does not know.
+ */
 export const PENDING: readonly { readonly id: string; readonly format: DraftFormat; readonly blockedOn: string }[] = [];
 
 function preset(
@@ -64,7 +69,7 @@ export const PRESETS: readonly Preset[] = [
   ),
 ];
 
-/** Offered when a room is created without a choice. */
+/** What a room gets when the organiser does not choose a format. */
 export const DEFAULT_PRESET_ID = "vg-5v5-standard";
 
 export function getPreset(id: string): Preset | undefined {
@@ -72,8 +77,10 @@ export function getPreset(id: string): Preset | undefined {
 }
 
 /**
- * Resolve a preset to the array a room should store. Throws on an id that is
- * merely pending, with the reason, rather than silently falling back.
+ * Hands back a copy of a format for a room to keep.
+ *
+ * Asking for a format whose order is not yet known fails outright, and says why,
+ * rather than quietly substituting a different one.
  */
 export function resolveScript(id: string): TurnScript {
   const found = getPreset(id);
@@ -86,11 +93,8 @@ export function resolveScript(id: string): TurnScript {
   throw new Error(`Unknown preset "${id}". Known: ${PRESETS.map((p) => p.id).join(", ")}.`);
 }
 
-/** The script a room gets if the organiser picks nothing. */
+/** The format used when the organiser expresses no preference. */
 export function defaultScript(): TurnScript {
   return resolveScript(DEFAULT_PRESET_ID);
 }
 
-export function describePreset(p: Preset): string {
-  return `${p.name} [${p.format}${p.official ? "" : ", placeholder"}]: ${formatScript(p.script)}`;
-}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ClientMessage, RoomError, RoomPhase, ServerMessage } from "../../src/room/protocol.js";
 import type { DraftProjection, Viewer } from "../../src/projection.js";
 
+/** Whether this screen is currently in touch with the room. */
 export type Link = "live" | "connecting" | "offline";
 
 export interface RoomView {
@@ -9,7 +10,10 @@ export interface RoomView {
   readonly viewer: Viewer | null;
   readonly phase: RoomPhase | null;
   readonly projection: DraftProjection | null;
-  /** Server clock minus ours. Countdowns are drawn against the room's clock, not the viewer's. */
+  /**
+   * How far this device's clock is from the room's. Countdowns are drawn
+   * against the room's time so that everyone watching sees the same number.
+   */
   readonly skewMs: number;
   readonly error: RoomError | null;
   readonly send: (message: ClientMessage) => void;
@@ -19,10 +23,13 @@ export interface RoomView {
 const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 15_000];
 
 /**
- * One socket to one room, with reconnects.
+ * Keeps this screen connected to its draft room and holds whatever the room
+ * last said.
  *
- * A dropped connection is never treated as a pause — the draft keeps running
- * without us — so reconnecting simply asks for the current state and redraws.
+ * If the connection drops it keeps trying to get back, waiting a little longer
+ * between attempts. Losing the connection does not pause anything: the draft
+ * carries on without this screen, so coming back is simply a matter of asking
+ * the room where things have got to and drawing that.
  */
 export function useRoom(roomId: string, token: string): RoomView {
   const [link, setLink] = useState<Link>("connecting");
@@ -36,9 +43,8 @@ export function useRoom(roomId: string, token: string): RoomView {
   const attemptRef = useRef(0);
 
   useEffect(() => {
-    // Scoped to this effect run, not a ref: React remounts effects (twice in
-    // development), and a ref shared across runs lets a dying socket's close
-    // event tear down the live one and open a third.
+    // Belongs to this connection attempt alone, so that an older connection
+    // closing can never be mistaken for the current one dropping.
     let cancelled = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
 
@@ -77,8 +83,8 @@ export function useRoom(roomId: string, token: string): RoomView {
       };
 
       socket.onclose = () => {
-        // Only the socket still in use may report the room offline or trigger a
-        // reconnect; a superseded one closing is not news.
+        // Only the connection actually in use may report the room as lost. An
+        // older one finally closing is not news.
         if (socketRef.current === socket) socketRef.current = null;
         if (cancelled) return;
         setLink("offline");
@@ -107,7 +113,7 @@ export function useRoom(roomId: string, token: string): RoomView {
   return { link, viewer, phase, projection, skewMs, error, send, dismissError };
 }
 
-/** Re-renders on a timer so a countdown can be drawn from `expiresAt`. */
+/** Nudges the screen a few times a second so a countdown appears to tick. */
 export function useNow(active: boolean, intervalMs = 100): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
