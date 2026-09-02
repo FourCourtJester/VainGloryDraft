@@ -3,9 +3,10 @@
 A tool for running custom pick/ban drafts for Vainglory, aimed at tournament
 organisers and their captains. 5v5 and 3v3 run on the same engine.
 
-The design is in [docs/HANDOFF.md](docs/HANDOFF.md). This repository currently
-holds the first slice of it: **the pure draft engine and its supporting types.**
-No transport, no UI yet.
+The design is in [docs/HANDOFF.md](docs/HANDOFF.md). What is built: a pure draft
+engine, a Cloudflare Durable Object holding one room each with an authoritative
+clock, and a React client. You can create a room, hand out three links, and run
+a draft end to end.
 
 ## The one idea
 
@@ -128,9 +129,27 @@ as the captain beside them.
 Auto-resolved actions are tagged `auto` wherever they appear, because a hero the
 clock chose must never look like one a captain chose.
 
+## Known gaps
+
+Things a tournament organiser would hit, in rough order of how much they matter:
+
+- **No hero portraits.** `image` is `null` for every hero, so the pool is a text
+  grid. The handoff calls for self-hosted portraits; that needs the scrape in
+  [docs/HERO_DATA.md](docs/HERO_DATA.md), which this environment could not run.
+- **No 3v3 preset.** Blocked on the real order, as above.
+- **Rooms are never cleaned up.** A finished room keeps its Durable Object
+  storage indefinitely. Needs a retention rule — an organiser decision as much as
+  a technical one.
+- **No organiser controls.** No start button (the room starts itself when both
+  captains connect), no remake, no undo. Deliberate for now: a remake is a new
+  room, and undo would need a rule about who may call it.
+- **Open CORS and no rate limiting** on `/api`. Anyone can create rooms. Fine for
+  a private deploy, not for a public one.
+- **Never deployed.** `wrangler deploy` has not been run — everything here was
+  verified against `wrangler dev` locally.
+
 ## Next
 
-The React + Vite client. The three links a room returns
-(`/r/:roomId?token=…`) are the client's route and 404 until it exists; the
-WebSocket API behind them is done. Settled questions are recorded in
+Portraits and role data, once the scrape can be run; the 3v3 preset, once the
+order is supplied. Settled questions are recorded in
 [docs/DECISIONS.md](docs/DECISIONS.md).
