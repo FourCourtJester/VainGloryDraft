@@ -73,6 +73,9 @@ await wait(400);
 check("the acting captain sees their own staging", (await a.locator("button.hero.staged").count()) === 1);
 check("spectators see the active team's staging", (await spectator.locator("button.hero.staged").count()) === 1);
 check("the opposing captain does not", (await b.locator("button.hero.staged").count()) === 0);
+// A spectator is shown the staging but must not be able to click it: the
+// server would only answer not_a_captain.
+check("a spectator cannot click the staged hero", await spectator.locator("button.hero.staged").first().isDisabled());
 await shot(a, "ui-staged");
 await shot(b, "ui-opponent");
 

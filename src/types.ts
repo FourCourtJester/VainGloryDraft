@@ -106,8 +106,14 @@ export function err<T>(code: DraftErrorCode, message: string): Result<T> {
   return { ok: false, error: { code, message } };
 }
 
-/** Why a hero cannot be selected right now, or `null` if it can. */
+/**
+ * What has happened to a hero so far.
+ *
+ * `by` is a list because mirror picks make "picked by both teams" a real state.
+ * Collapsing it to one team would lose the fact that the *other* team also holds
+ * the hero — and legality is decided per team.
+ */
 export type HeroAvailability =
   | { readonly state: "available" }
   | { readonly state: "banned" }
-  | { readonly state: "picked"; readonly by: Team };
+  | { readonly state: "picked"; readonly by: readonly Team[] };

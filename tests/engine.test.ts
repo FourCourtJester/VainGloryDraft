@@ -173,7 +173,7 @@ describe("legality", () => {
     const result = stage(state, "B", "a");
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("hero_picked_by_opponent");
-    expect(availability(state, "a")).toEqual({ state: "picked", by: "A" });
+    expect(availability(state, "a")).toEqual({ state: "picked", by: ["A"] });
   });
 
   it("allows a mirror pick when the room enables it", () => {
@@ -189,6 +189,40 @@ describe("legality", () => {
     const result = stage(state, "A", "a");
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("hero_picked");
+  });
+
+  it("still refuses a repeat after the other team has mirrored it", () => {
+    // Regression: availability used to report only the *first* team to pick a
+    // hero, so once B mirrored A's pick, B's own claim on it disappeared and B
+    // could pick the same hero again.
+    let state = start({ script: parseScript("Apick, Bpick, Apick, Bpick"), mirrorPicks: true });
+    state = play(state, "a"); // A picks a
+    state = play(state, "a"); // B mirrors a
+    state = play(state, "b"); // A picks b
+    const result = stage(state, "B", "a");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("hero_picked");
+  });
+
+  it("reports both teams once a hero is mirrored", () => {
+    let state = start({ script: parseScript("Apick, Bpick"), mirrorPicks: true });
+    state = play(state, "a");
+    expect(availability(state, "a")).toEqual({ state: "picked", by: ["A"] });
+    state = play(state, "a");
+    expect(availability(state, "a")).toEqual({ state: "picked", by: ["A", "B"] });
+  });
+
+  it("never auto-fills a hero the team already holds under mirror rules", () => {
+    let state = start({
+      script: parseScript("Apick, Bpick, Apick, Bpick"),
+      mirrorPicks: true,
+      autoFill: "lowestIndex",
+      heroPool: ["a", "b", "c"],
+    });
+    state = play(state, "a");
+    state = play(state, "a");
+    state = play(state, "b");
+    expect(autoFillSelection(state)).toEqual(["b"]);
   });
 
   it("rejects a hero outside the pool", () => {

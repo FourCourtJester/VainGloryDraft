@@ -178,6 +178,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .hero.banned { opacity: 0.4; text-decoration: line-through; }
 .hero.picked-A { opacity: 0.55; border-color: var(--a); }
 .hero.picked-B { opacity: 0.55; border-color: var(--b); }
+/* Mirror picks: both teams hold this hero. */
+.hero.picked-AB { opacity: 0.55; border-color: var(--muted); }
 .hero-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag { font-size: 10px; text-transform: uppercase; color: var(--muted); }
 

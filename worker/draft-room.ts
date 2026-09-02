@@ -33,6 +33,8 @@ export class DraftRoom implements DurableObject {
   #room: Room | null = null;
   /** The snapshot last written to storage, by identity: `Room` replaces the object on every mutation. */
   #persisted: RoomSnapshot | null = null;
+  /** The deadline currently armed, so the same alarm is not re-written on every broadcast. */
+  #armed: number | null = null;
 
   constructor(ctx: DurableObjectState, _env: Env) {
     this.#ctx = ctx;
@@ -46,6 +48,13 @@ export class DraftRoom implements DurableObject {
         const attachment = socket.deserializeAttachment() as SocketAttachment | null;
         if (attachment !== null) this.#room.attach(attachment.connectionId, attachment.viewer, Date.now());
       }
+      // A room woken with a live turn and no alarm would sit there forever. The
+      // stored alarm normally survives, but it costs one read to be sure.
+      const due = this.#room.alarmAt();
+      if (due !== null && (await ctx.storage.getAlarm()) === null) {
+        await ctx.storage.setAlarm(due);
+      }
+      this.#armed = due;
     });
   }
 
@@ -159,9 +168,24 @@ export class DraftRoom implements DurableObject {
   async alarm(): Promise<void> {
     const room = this.#room;
     if (room === null) return;
+    // The platform clears an alarm as it fires, so nothing is armed right now.
+    this.#armed = null;
     const now = Date.now();
     const outcome = room.tick(now);
     await this.#settleIfNeeded(outcome, now);
+    // Always re-arm, even when the tick resolved nothing: an alarm that fires a
+    // millisecond early would otherwise leave the room in `drafting` with no
+    // clock at all — the exact failure the alarm exists to prevent.
+    await this.#armAlarm();
+  }
+
+  /** Make the stored alarm match the room's current deadline. Idempotent. */
+  async #armAlarm(): Promise<void> {
+    const due = this.#room?.alarmAt() ?? null;
+    if (due === this.#armed) return;
+    if (due === null) await this.#ctx.storage.deleteAlarm();
+    else await this.#ctx.storage.setAlarm(due);
+    this.#armed = due;
   }
 
   /**
@@ -182,11 +206,8 @@ export class DraftRoom implements DurableObject {
     if (room.snapshot !== this.#persisted) {
       await this.#ctx.storage.put(SNAPSHOT_KEY, room.snapshot);
       this.#persisted = room.snapshot;
-
-      const alarmAt = room.alarmAt();
-      if (alarmAt !== null) await this.#ctx.storage.setAlarm(alarmAt);
-      else await this.#ctx.storage.deleteAlarm();
     }
+    await this.#armAlarm();
 
     const sockets = new Map<string, WebSocket>();
     for (const socket of this.#ctx.getWebSockets()) {

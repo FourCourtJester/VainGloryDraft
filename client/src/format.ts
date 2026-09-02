@@ -2,8 +2,11 @@ import type { Turn } from "../../src/types.js";
 
 export function clock(ms: number): string {
   const safe = Math.max(0, ms);
-  const seconds = Math.floor(safe / 1000);
-  if (seconds < 10) return (safe / 1000).toFixed(1);
+  // Round to tenths *before* choosing the format: picking the sub-10s branch on
+  // the floored seconds and then rounding up renders 9999ms as "10.0".
+  const tenths = Math.floor(safe / 100);
+  if (tenths < 100) return (tenths / 10).toFixed(1);
+  const seconds = Math.floor(tenths / 10);
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 

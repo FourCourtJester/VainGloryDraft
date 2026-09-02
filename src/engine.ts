@@ -65,12 +65,15 @@ export function allBans(state: DraftState): readonly string[] {
 }
 
 export function availability(state: DraftState, heroId: string): HeroAvailability {
+  const by: Team[] = [];
   for (const committed of state.committed) {
     if (!committed.heroes.includes(heroId)) continue;
+    // A picked hero can never be banned afterwards, so a ban is always the whole
+    // story for this hero.
     if (committed.action === "ban") return { state: "banned" };
-    return { state: "picked", by: committed.team };
+    if (!by.includes(committed.team)) by.push(committed.team);
   }
-  return { state: "available" };
+  return by.length === 0 ? { state: "available" } : { state: "picked", by };
 }
 
 /**
@@ -92,7 +95,9 @@ export function selectionProblem(state: DraftState, heroId: string): DraftError 
     // A picked hero can never be banned afterwards, and can never be picked twice
     // by the same team. The other team may re-pick only under mirror rules.
     if (turn.action === "ban") return { code: "hero_picked", message: `${heroId} has already been picked.` };
-    if (status.by === turn.team) return { code: "hero_picked", message: `Your team already picked ${heroId}.` };
+    if (status.by.includes(turn.team)) {
+      return { code: "hero_picked", message: `Your team already picked ${heroId}.` };
+    }
     if (!state.config.mirrorPicks) {
       return {
         code: "hero_picked_by_opponent",

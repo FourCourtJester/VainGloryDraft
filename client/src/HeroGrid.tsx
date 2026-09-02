@@ -78,14 +78,14 @@ export function HeroGrid({ heroes, rolesVerified, projection, interactive, onTog
               <button
                 type="button"
                 className={`hero ${state}${isStaged ? " staged" : ""}`}
-                disabled={!canPick && !isStaged}
+                disabled={!canPick}
                 onClick={() => onToggle(id)}
                 data-hero={id}
                 aria-pressed={isStaged}
               >
                 <span className="hero-name">{hero.name}</span>
                 {availability.state === "banned" && <span className="tag">banned</span>}
-                {availability.state === "picked" && <span className="tag">{availability.by}</span>}
+                {availability.state === "picked" && <span className="tag">{availability.by.join("+")}</span>}
               </button>
             </li>
           );

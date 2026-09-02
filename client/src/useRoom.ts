@@ -34,10 +34,12 @@ export function useRoom(roomId: string, token: string): RoomView {
 
   const socketRef = useRef<WebSocket | null>(null);
   const attemptRef = useRef(0);
-  const closedRef = useRef(false);
 
   useEffect(() => {
-    closedRef.current = false;
+    // Scoped to this effect run, not a ref: React remounts effects (twice in
+    // development), and a ref shared across runs lets a dying socket's close
+    // event tear down the live one and open a third.
+    let cancelled = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
 
     const open = (): void => {
@@ -45,14 +47,19 @@ export function useRoom(roomId: string, token: string): RoomView {
       const url = `${scheme}://${window.location.host}/api/rooms/${roomId}/ws?token=${encodeURIComponent(token)}`;
       const socket = new WebSocket(url);
       socketRef.current = socket;
-      setLink(attemptRef.current === 0 ? "connecting" : "connecting");
+      setLink("connecting");
 
       socket.onopen = () => {
+        if (cancelled) {
+          socket.close();
+          return;
+        }
         attemptRef.current = 0;
         setLink("live");
       };
 
       socket.onmessage = (event: MessageEvent<string>) => {
+        if (cancelled || socketRef.current !== socket) return;
         const message = JSON.parse(event.data) as ServerMessage;
         switch (message.t) {
           case "welcome":
@@ -70,8 +77,10 @@ export function useRoom(roomId: string, token: string): RoomView {
       };
 
       socket.onclose = () => {
-        socketRef.current = null;
-        if (closedRef.current) return;
+        // Only the socket still in use may report the room offline or trigger a
+        // reconnect; a superseded one closing is not news.
+        if (socketRef.current === socket) socketRef.current = null;
+        if (cancelled) return;
         setLink("offline");
         const wait = BACKOFF_MS[Math.min(attemptRef.current, BACKOFF_MS.length - 1)]!;
         attemptRef.current += 1;
@@ -81,9 +90,10 @@ export function useRoom(roomId: string, token: string): RoomView {
 
     open();
     return () => {
-      closedRef.current = true;
+      cancelled = true;
       if (retry !== undefined) clearTimeout(retry);
       socketRef.current?.close();
+      socketRef.current = null;
     };
   }, [roomId, token]);
 
