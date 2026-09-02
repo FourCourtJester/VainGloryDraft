@@ -13,7 +13,7 @@ import type { DraftEvent } from "../src/events.js";
 import type { Viewer } from "../src/projection.js";
 import type { ServerMessage } from "../src/room/protocol.js";
 import { parseClientMessage } from "../src/room/protocol.js";
-import type { CreateRoomOptions, RoomSnapshot } from "../src/room/room.js";
+import type { CreateRoomOptions, RoomOutcome, RoomSnapshot } from "../src/room/room.js";
 import { Room } from "../src/room/room.js";
 
 const SNAPSHOT_KEY = "snapshot";
@@ -84,7 +84,7 @@ export class DraftRoom implements DurableObject {
     return json({ roomId: snapshot.roomId, tokens: snapshot.tokens });
   }
 
-  #connect(request: Request, url: URL): Response {
+  async #connect(request: Request, url: URL): Promise<Response> {
     if (request.headers.get("Upgrade") !== "websocket") {
       return json({ error: "Expected a WebSocket upgrade." }, 426);
     }
@@ -105,19 +105,21 @@ export class DraftRoom implements DurableObject {
     const now = Date.now();
     const outcome = room.attach(connectionId, viewer, now);
     send(server, { t: "welcome", roomId: room.snapshot.roomId, viewer });
-    void this.#settle(outcome.events, now);
+    // Awaited, not floated: the room must be durable before the socket is live,
+    // or a connection that starts the draft could outlive the write that says so.
+    await this.#settleIfNeeded(outcome, now);
 
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  #state(url: URL): Response {
+  async #state(url: URL): Promise<Response> {
     const room = this.#room!;
     const viewer = room.authenticate(url.searchParams.get("token") ?? "");
     if (viewer === null) return json({ error: "Invalid link." }, 403);
 
     const now = Date.now();
     const outcome = room.tick(now);
-    if (outcome.changed) void this.#settle(outcome.events, now);
+    await this.#settleIfNeeded(outcome, now);
     return json({ t: "state", phase: room.phase, serverTime: now, projection: room.projection(viewer, now), events: [] });
   }
 
@@ -137,7 +139,7 @@ export class DraftRoom implements DurableObject {
     if (outcome.error !== null) send(socket, { t: "error", error: outcome.error });
     // A rejected click changes nothing, so it earns no write and no broadcast:
     // the captain who sent it gets the error, and the room carries on.
-    if (outcome.changed) await this.#settle(outcome.events, now);
+    await this.#settleIfNeeded(outcome, now);
   }
 
   async webSocketClose(socket: WebSocket): Promise<void> {
@@ -146,7 +148,7 @@ export class DraftRoom implements DurableObject {
     if (room === null || attachment === null) return;
     const now = Date.now();
     const outcome = room.detach(attachment.connectionId, now);
-    if (outcome.changed) await this.#settle(outcome.events, now);
+    await this.#settleIfNeeded(outcome, now);
   }
 
   async webSocketError(socket: WebSocket): Promise<void> {
@@ -159,7 +161,18 @@ export class DraftRoom implements DurableObject {
     if (room === null) return;
     const now = Date.now();
     const outcome = room.tick(now);
-    if (outcome.changed) await this.#settle(outcome.events, now);
+    await this.#settleIfNeeded(outcome, now);
+  }
+
+  /**
+   * Settle whenever anything changed — including when the room's own report says
+   * otherwise but its state has moved past what is stored. Unpersisted state
+   * with a spent alarm is the one condition this object must never end a call in.
+   */
+  async #settleIfNeeded(outcome: RoomOutcome, now: number): Promise<void> {
+    if (outcome.changed || this.#room?.snapshot !== this.#persisted) {
+      await this.#settle(outcome.events, now);
+    }
   }
 
   /** Persist, re-arm the alarm, and give every connection its own filtered view. */

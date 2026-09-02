@@ -57,8 +57,16 @@ export interface RoomOutcome {
 
 const NOTHING: RoomOutcome = { events: [], error: null, changed: false };
 
-function failure(code: RoomError["code"], message: string): RoomOutcome {
-  return { events: [], error: { code, message }, changed: false };
+/**
+ * A refusal, carrying whatever the clock did on the way in.
+ *
+ * `command` runs the clock before it checks permissions, so a rejected message
+ * can still arrive holding a turn the clock has just resolved. Reporting
+ * `changed: false` there would tell the host there is nothing to persist,
+ * broadcast or re-arm — and the room would stall with its alarm already spent.
+ */
+function refuse(code: RoomError["code"], message: string, ticked: RoomOutcome): RoomOutcome {
+  return { events: ticked.events, error: { code, message }, changed: ticked.changed };
 }
 
 export class Room {
@@ -160,13 +168,13 @@ export class Room {
     const overdue = this.tick(now);
 
     if (viewer.role !== "captain") {
-      return { ...failure("not_a_captain", "Spectators cannot act in the draft."), events: overdue.events };
+      return refuse("not_a_captain", "Spectators cannot act in the draft.", overdue);
     }
     if (this.#snapshot.phase === "lobby") {
-      return { ...failure("not_started", "The draft has not started: both captains must connect."), events: overdue.events };
+      return refuse("not_started", "The draft has not started: both captains must connect.", overdue);
     }
     if (this.#snapshot.phase === "complete") {
-      return { ...failure("draft_complete", "The draft is over."), events: overdue.events };
+      return refuse("draft_complete", "The draft is over.", overdue);
     }
 
     const before = this.#snapshot.draft;
@@ -177,9 +185,7 @@ export class Room {
           ? unstage(before, viewer.team, message.heroId)
           : commit(before, viewer.team);
 
-    if (!result.ok) {
-      return { events: overdue.events, error: result.error, changed: overdue.changed };
-    }
+    if (!result.ok) return refuse(result.error.code, result.error.message, overdue);
 
     const committed = message.t === "confirm";
     this.#advance(result.value, committed ? now : null);

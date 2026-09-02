@@ -90,7 +90,12 @@ async function createRoom(request: Request, env: Env, url: URL): Promise<Respons
   let body: CreateRoomRequest = {};
   try {
     if (request.headers.get("content-type")?.includes("application/json") === true) {
-      body = (await request.json()) as CreateRoomRequest;
+      const parsed: unknown = await request.json();
+      // A body of literal `null` parses fine and is not an object: reading a
+      // field off it would throw past this handler and answer 500.
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        body = parsed as CreateRoomRequest;
+      }
     }
   } catch {
     return json({ error: "Body must be JSON." }, 400);

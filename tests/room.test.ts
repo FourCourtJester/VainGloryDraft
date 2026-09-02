@@ -322,3 +322,43 @@ describe("option validation", () => {
     for (const bad of ["lowest", "", null, 7]) expect(parseAutoFill(bad)).toBeUndefined();
   });
 });
+
+describe("a command that changes nothing must not swallow the clock", () => {
+  // Regression: `command` runs the clock before the permission checks, so a
+  // rejected message can carry a turn the clock just resolved. If that outcome
+  // reports `changed: false`, the host skips persisting, broadcasting and
+  // re-arming the alarm — and the room silently stalls.
+  it("reports the tick's changes even when the sender is a spectator", () => {
+    const room = liveRoom();
+    const deadline = room.alarmAt()!;
+    const outcome = room.command(SPECTATOR, { t: "stage", heroId: "a" }, deadline + 1);
+
+    expect(outcome.error?.code).toBe("not_a_captain");
+    expect(outcome.events[0]).toMatchObject({ type: "ban", auto: true });
+    expect(outcome.changed).toBe(true);
+  });
+
+  it("reports them when the draft finished on that same tick", () => {
+    const room = liveRoom();
+    // Run the clock out entirely, leaving the last turn to expire.
+    let at = T0;
+    while (room.phase === "drafting" && room.alarmAt() !== null) {
+      at = room.alarmAt()! + 1;
+      const outcome = room.command(SPECTATOR, { t: "confirm" }, at);
+      expect(outcome.changed).toBe(true);
+    }
+    expect(room.phase).toBe("complete");
+
+    // And once complete, a stray message changes nothing at all.
+    const after = room.command(SPECTATOR, { t: "confirm" }, at + 1_000);
+    expect(after.changed).toBe(false);
+  });
+
+  it("keeps reporting them for a captain refused before the draft starts", () => {
+    const room = new Room(snapshot());
+    room.attach("a1", CAPTAIN_A, T0);
+    const outcome = room.command(CAPTAIN_A, { t: "confirm" }, T0 + 600_000);
+    expect(outcome.error?.code).toBe("not_started");
+    expect(outcome.changed).toBe(false); // the lobby clock never started
+  });
+});
