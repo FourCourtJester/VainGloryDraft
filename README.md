@@ -25,6 +25,7 @@ is *derived* from the script. Nothing assumes "five picks a side".
 |---|---|
 | `src/types.ts` | `Team`, `Action`, `Turn`, `TurnScript`, `Hero`, `DraftConfig`, `DraftState` |
 | `src/script.ts` | Script validation, derived totals, `parseScript`/`formatScript` notation |
+| `src/config.ts` | Room defaults: mirror picks off, auto-fill random |
 | `src/engine.ts` | The engine: current turn, legal heroes, staging, commit, timeout resolution |
 | `src/timer.ts` | Per-turn clock plus reserve bank. Pure: computes, never counts down |
 | `src/events.ts` | `pick \| ban \| turnChange \| draftComplete` and a subscription bus |
@@ -34,7 +35,7 @@ is *derived* from the script. Nothing assumes "five picks a side".
 
 ```
 npm install
-npm test          # 84 tests
+npm test          # 87 tests
 npm run typecheck
 ```
 
@@ -45,6 +46,8 @@ npm run typecheck
 - **Timeouts are deterministic.** `autoFillSelection` keeps whatever was staged
   and fills only the remainder, seeded from the room seed plus the turn index, so
   any auto-action can be replayed from the room log and argued about with facts.
+  Random is the rule for every timeout, not just partially staged turns — see
+  [docs/DECISIONS.md](docs/DECISIONS.md).
 - **No pause.** The clock is a pure function of `turnStartedAt` and each team's
   bank. A disconnect burns time like any other silence; the projection carries a
   per-captain connection indicator so the room can see it and decide for itself.
@@ -74,5 +77,7 @@ not have, and guessing either would be worse than leaving them empty:
 
 ## Next
 
-Transport (Cloudflare Durable Object, one per room), the turn alarm, link tokens,
-then the React client. All of it wraps the engine; none of it changes it.
+Transport (Cloudflare Durable Object, one per room), the turn alarm, reusable
+captain link tokens, then a React + Vite client. All of it wraps the engine; none
+of it changes it. Settled questions are recorded in
+[docs/DECISIONS.md](docs/DECISIONS.md).
