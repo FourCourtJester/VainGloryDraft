@@ -1,0 +1,416 @@
+{
+  "verified": false,
+  "note": "Hero NAMES only. roles and attackType are deliberately empty: per the design handoff they must be scraped from a reliable source, never invented. See docs/HERO_DATA.md. Portraits are not yet self-hosted, so image is null.",
+  "roster": {
+    "count": 58,
+    "source": "Design handoff plus community roster listings; not yet verified against vaingloryfire.com."
+  },
+  "heroes": [
+    {
+      "id": "adagio",
+      "name": "Adagio",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "alpha",
+      "name": "Alpha",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "amael",
+      "name": "Amael",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "anka",
+      "name": "Anka",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "ardan",
+      "name": "Ardan",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "baptiste",
+      "name": "Baptiste",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "baron",
+      "name": "Baron",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "blackfeather",
+      "name": "Blackfeather",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "caine",
+      "name": "Caine",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "catherine",
+      "name": "Catherine",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "celeste",
+      "name": "Celeste",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "churnwalker",
+      "name": "Churnwalker",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "corpus",
+      "name": "Corpus",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "flicker",
+      "name": "Flicker",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "fortress",
+      "name": "Fortress",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "glaive",
+      "name": "Glaive",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "grace",
+      "name": "Grace",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "grumpjaw",
+      "name": "Grumpjaw",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "gwen",
+      "name": "Gwen",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "idris",
+      "name": "Idris",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "inara",
+      "name": "Inara",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "ishtar",
+      "name": "Ishtar",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "joule",
+      "name": "Joule",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "karas",
+      "name": "Karas",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "kensei",
+      "name": "Kensei",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "kestrel",
+      "name": "Kestrel",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "kinetic",
+      "name": "Kinetic",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "koshka",
+      "name": "Koshka",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "krul",
+      "name": "Krul",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "lance",
+      "name": "Lance",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "leo",
+      "name": "Leo",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "lorelai",
+      "name": "Lorelai",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "lyra",
+      "name": "Lyra",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "magnus",
+      "name": "Magnus",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "malene",
+      "name": "Malene",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "miho",
+      "name": "Miho",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "ozo",
+      "name": "Ozo",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "petal",
+      "name": "Petal",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "phinn",
+      "name": "Phinn",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "reim",
+      "name": "Reim",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "reza",
+      "name": "Reza",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "ringo",
+      "name": "Ringo",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "rona",
+      "name": "Rona",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "samuel",
+      "name": "Samuel",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "san-feng",
+      "name": "San Feng",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "saw",
+      "name": "SAW",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "shin",
+      "name": "Shin",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "silvernail",
+      "name": "Silvernail",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "skaarf",
+      "name": "Skaarf",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "skye",
+      "name": "Skye",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "taka",
+      "name": "Taka",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "tony",
+      "name": "Tony",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "varya",
+      "name": "Varya",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "viola",
+      "name": "Viola",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "vox",
+      "name": "Vox",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "warhawk",
+      "name": "Warhawk",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "yates",
+      "name": "Yates",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    },
+    {
+      "id": "ylva",
+      "name": "Ylva",
+      "roles": [],
+      "attackType": null,
+      "image": null
+    }
+  ]
+}
