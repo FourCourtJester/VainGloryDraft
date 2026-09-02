@@ -13,6 +13,11 @@ seed plus the turn index reproduce any auto-action exactly, so a disputed pick
 can be replayed from the log. Implemented as `DRAFT_DEFAULTS.autoFill` in
 `src/config.ts`; `lowestIndex` stays available per room.
 
+Determinism here is not the same as predictability, and the distinction is the
+whole point: the room seed never leaves the server, so a draw can be replayed
+from the log *and the seed*, but not guessed in advance from the draws already
+seen. `src/random.ts` carries 128 bits of state for that reason.
+
 **Captain links: reusable.** The same link works after a browser crash, on a
 phone, or on a reconnect. Forwardable in principle, but the room already assumes
 captains hold their own links, and with no pause a captain locked out of their
