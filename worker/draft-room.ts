@@ -118,7 +118,7 @@ export class DraftRoom implements DurableObject {
     const now = Date.now();
     const outcome = room.tick(now);
     if (outcome.changed) void this.#settle(outcome.events, now);
-    return json({ t: "state", phase: room.phase, projection: room.projection(viewer, now), events: [] });
+    return json({ t: "state", phase: room.phase, serverTime: now, projection: room.projection(viewer, now), events: [] });
   }
 
   async webSocketMessage(socket: WebSocket, raw: string | ArrayBuffer): Promise<void> {
@@ -183,7 +183,7 @@ export class DraftRoom implements DurableObject {
 
     for (const { connectionId, projection } of room.audience(now)) {
       const socket = sockets.get(connectionId);
-      if (socket !== undefined) send(socket, { t: "state", phase: room.phase, projection, events });
+      if (socket !== undefined) send(socket, { t: "state", phase: room.phase, serverTime: now, projection, events });
     }
   }
 }

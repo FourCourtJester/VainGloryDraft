@@ -7,8 +7,8 @@
 
 import { HEROES, HERO_DATA_VERIFIED } from "../src/heroes.js";
 import { PENDING, PRESETS } from "../src/presets.js";
+import { parseAutoFill, parseTimerRules } from "../src/room/options.js";
 import type { CreateRoomOptions } from "../src/room/room.js";
-import { DEFAULT_TIMER_RULES } from "../src/room/room.js";
 import { generateToken } from "../src/room/tokens.js";
 import { parseScript } from "../src/script.js";
 import { resolveScript } from "../src/presets.js";
@@ -17,6 +17,7 @@ export { DraftRoom } from "./draft-room.js";
 
 export interface Env {
   readonly DRAFT_ROOM: DurableObjectNamespace;
+  readonly ASSETS: Fetcher;
 }
 
 interface CreateRoomRequest {
@@ -73,6 +74,14 @@ export default {
       return route === "ws" ? response : withCors(response);
     }
 
+    // Room links are client routes: hand them the SPA, which reads the room id
+    // and token from the URL itself.
+    if (/^\/r\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)) {
+      // Ask for "/", not "/index.html": the asset router canonicalises the
+      // latter with a redirect, which would throw the link token away.
+      return env.ASSETS.fetch(new Request(new URL("/", url), request));
+    }
+
     return json({ error: "Not found." }, 404);
   },
 } satisfies ExportedHandler<Env>;
@@ -87,17 +96,19 @@ async function createRoom(request: Request, env: Env, url: URL): Promise<Respons
     return json({ error: "Body must be JSON." }, 400);
   }
 
+  const { rules, problems } = parseTimerRules(body.perTurnMs, body.bankMs);
+  if (problems.length > 0) {
+    return json({ error: problems.map((problem) => problem.message).join(" ") }, 400);
+  }
+
   let options: CreateRoomOptions;
   try {
     options = {
       roomId: generateToken(8),
       script: body.script !== undefined ? parseScript(body.script) : resolveScript(body.presetId ?? "vg-5v5-standard"),
-      mirrorPicks: body.mirrorPicks ?? false,
-      autoFill: body.autoFill ?? "random",
-      rules: {
-        perTurnMs: body.perTurnMs ?? DEFAULT_TIMER_RULES.perTurnMs,
-        bankMs: body.bankMs ?? DEFAULT_TIMER_RULES.bankMs,
-      },
+      mirrorPicks: body.mirrorPicks === true,
+      autoFill: parseAutoFill(body.autoFill) ?? "random",
+      rules,
     };
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Invalid room options." }, 400);

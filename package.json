@@ -10,12 +10,21 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "dev": "wrangler dev",
+    "dev": "npm run build && wrangler dev",
     "deploy": "wrangler deploy",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "build": "vite build --config client/vite.config.ts client",
+    "dev:client": "vite --config client/vite.config.ts client",
+    "ui-check": "node scripts/ui-check.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260902.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
+    "playwright": "^1.62.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8",
     "wrangler": "^4.128.0"

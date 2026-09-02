@@ -34,14 +34,19 @@ is *derived* from the script. Nothing assumes "five picks a side".
 | `src/heroes.ts`, `data/heroes.json` | Static roster, checked in, never fetched at runtime |
 | `src/room/` | Room: engine + clock + tokens + connections. No Cloudflare imports |
 | `worker/` | Durable Object and Worker routes — a thin adapter over `Room` |
+| `client/` | React + Vite SPA: the create screen and the draft room |
 
 ```
 npm install
-npm test          # 121 tests
+npm test          # 126 tests
 npm run typecheck
-npm run dev       # wrangler dev on :8787
-npm run smoke     # end-to-end against a running dev worker, alarm included
+npm run dev       # builds the client, then wrangler dev on :8787
+npm run smoke     # protocol end-to-end against a running dev worker
+npm run ui-check  # the same in a real browser, three viewers at once
 ```
+
+Open http://127.0.0.1:8787, create a room, and open the two captain links in
+separate windows.
 
 The protocol — routes, messages, phases — is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
@@ -110,6 +115,18 @@ mid-draft wakes up and resolves each missed turn at its own deadline rather than
 all at once.
 
 A room sits in a lobby, clock stopped, until both captains connect.
+
+## The client
+
+A React + Vite SPA, served by the same Worker. It renders what the server sends
+and asks for things; it decides nothing. In particular it never computes
+legality — a hero is clickable because the server said it was selectable — and
+it draws the countdown from `expiresAt` against the server's own clock, which
+each `state` message carries, so a viewer with a fast laptop sees the same time
+as the captain beside them.
+
+Auto-resolved actions are tagged `auto` wherever they appear, because a hero the
+clock chose must never look like one a captain chose.
 
 ## Next
 

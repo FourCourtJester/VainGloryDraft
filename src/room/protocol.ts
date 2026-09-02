@@ -30,6 +30,12 @@ export type ServerMessage =
   | {
       readonly t: "state";
       readonly phase: RoomPhase;
+      /**
+       * The room's own clock at the moment it sent this. Clients compare it with
+       * their own to correct for skew — a viewer whose laptop is a minute fast
+       * must not see a minute less time than the captain beside them.
+       */
+      readonly serverTime: number;
       readonly projection: DraftProjection;
       /** Committed actions since the last state message. Staging never appears here. */
       readonly events: readonly DraftEvent[];

@@ -2,6 +2,12 @@ name = "vainglory-draft"
 main = "worker/index.ts"
 compatibility_date = "2025-01-01"
 
+# The SPA. Static files are served straight from here; anything that is not a
+# file — /api/* and the /r/:roomId room links — falls through to the Worker.
+[assets]
+directory = "./client/dist"
+binding = "ASSETS"
+
 [[durable_objects.bindings]]
 name = "DRAFT_ROOM"
 class_name = "DraftRoom"

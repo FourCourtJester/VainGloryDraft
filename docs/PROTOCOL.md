@@ -22,9 +22,12 @@ connect over a WebSocket and are told what they are allowed to see.
 
 `script` is compact notation and wins over `presetId`. With neither, a room gets
 `vg-5v5-standard`. The response carries three links — captain A, captain B,
-spectator — of the form `/r/:roomId?token=…`, which is the **client** route: the
-UI does not exist yet, so those links 404 until it does. The WebSocket path above
-is what works today.
+spectator — of the form `/r/:roomId?token=…`. The Worker serves the SPA there,
+which reads the room id and token straight from the URL.
+
+Room options are validated before they reach the engine: `perTurnMs` and `bankMs`
+must be finite numbers inside sane bounds, and an unknown `autoFill` falls back
+to `random` rather than being stored.
 
 ## Identity
 
@@ -51,10 +54,13 @@ changes nothing.
 
 ```jsonc
 { "t": "welcome", "roomId": "…", "viewer": { "role": "captain", "team": "A" } }
-{ "t": "state",   "phase": "drafting", "projection": { … }, "events": [ … ] }
+{ "t": "state",   "phase": "drafting", "serverTime": 1730000000000, "projection": { … }, "events": [ … ] }
 { "t": "error",   "error": { "code": "wrong_team", "message": "…" } }
 ```
 
+- **`serverTime`** is the room's own clock when it sent the message. Clients
+  compare it with theirs and draw the countdown against the room's, so a viewer
+  whose laptop is a minute fast does not see a minute less time.
 - **`state`** goes to every connection after anything changes, each with its own
   projection. `staged` is `null` for a viewer not allowed to see it; `stagedCount`
   is always present.
@@ -86,6 +92,7 @@ history as one that was watched the whole way through.
 ## Trying it
 
 ```
-npm run dev      # wrangler dev on :8787
-npm run smoke    # drives a real room end to end, alarm included
+npm run dev       # builds the client, then wrangler dev on :8787
+npm run smoke     # drives a real room end to end, alarm included
+npm run ui-check  # the same through the real UI in Chromium
 ```

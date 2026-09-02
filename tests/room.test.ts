@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { currentTurn } from "../src/engine.js";
 import { parseClientMessage } from "../src/room/protocol.js";
+import { parseAutoFill, parseTimerRules } from "../src/room/options.js";
 import { DEFAULT_TIMER_RULES, Room } from "../src/room/room.js";
 import type { RoomSnapshot } from "../src/room/room.js";
 import { generateRoomTokens, generateToken, tokensMatch } from "../src/room/tokens.js";
@@ -290,5 +291,34 @@ describe("parseClientMessage", () => {
 
   it("ignores a claim about who is sending — identity comes from the token", () => {
     expect(parseClientMessage('{"t":"confirm","team":"B","role":"captain"}')).toEqual({ t: "confirm" });
+  });
+});
+
+describe("option validation", () => {
+  it("keeps the defaults when nothing is supplied", () => {
+    expect(parseTimerRules(undefined, undefined)).toEqual({ rules: DEFAULT_TIMER_RULES, problems: [] });
+  });
+
+  it("accepts sane values", () => {
+    expect(parseTimerRules(45_000, 0).rules).toEqual({ perTurnMs: 45_000, bankMs: 0 });
+  });
+
+  it("refuses values that would break the clock", () => {
+    // A NaN or a negative deadline reaches the alarm, where it is unrecoverable.
+    for (const bad of [Number.NaN, Infinity, -1, 0, "30000", true, {}]) {
+      expect(parseTimerRules(bad, undefined).problems.length).toBeGreaterThan(0);
+    }
+    expect(parseTimerRules(30_000, -5).problems).toHaveLength(1);
+    expect(parseTimerRules(30_000, 10 ** 12).problems).toHaveLength(1);
+  });
+
+  it("falls back rather than storing a bad value", () => {
+    expect(parseTimerRules(Number.NaN, undefined).rules).toEqual(DEFAULT_TIMER_RULES);
+  });
+
+  it("only accepts the two auto-fill strategies", () => {
+    expect(parseAutoFill("random")).toBe("random");
+    expect(parseAutoFill("lowestIndex")).toBe("lowestIndex");
+    for (const bad of ["lowest", "", null, 7]) expect(parseAutoFill(bad)).toBeUndefined();
   });
 });
