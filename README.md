@@ -49,6 +49,9 @@ npm run ui-check  # the same in a real browser, three viewers at once
 Open http://127.0.0.1:8787, create a room, and open the two captain links in
 separate windows.
 
+`smoke` and `ui-check` need a worker already running, so CI runs the first
+three only.
+
 The protocol — routes, messages, phases — is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Design decisions the code enforces
