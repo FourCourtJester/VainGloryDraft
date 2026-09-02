@@ -12,6 +12,10 @@ binding = "ASSETS"
 name = "DRAFT_ROOM"
 class_name = "DraftRoom"
 
+# Each draft room is one of these, and this is what keeps the app on the free
+# plan: "new_sqlite_classes" declares the SQLite-backed kind of durable object,
+# which the Workers free plan includes. The older key-value kind
+# ("new_classes") is not free. Do not change this line.
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["DraftRoom"]

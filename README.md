@@ -149,9 +149,10 @@ Things a tournament organiser would hit, in rough order of how much they matter:
   captains connect), no remake, no undo. Deliberate for now: a remake is a new
   room, and undo would need a rule about who may call it.
 - **Open CORS and no rate limiting** on `/api`. Anyone can create rooms. Fine for
-  a private deploy, not for a public one.
+  a private deploy, not for a public one — and worth remembering that the free
+  plan has a daily request allowance somebody else could spend for you.
 - **Never deployed.** `wrangler deploy` has not been run — everything here was
-  verified against `wrangler dev` locally.
+  verified against `wrangler dev` locally. See [docs/DEPLOYING.md](docs/DEPLOYING.md).
 
 ## Next
 
