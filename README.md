@@ -30,12 +30,12 @@ is *derived* from the script. Nothing assumes "five picks a side".
 | `src/timer.ts` | Per-turn clock plus reserve bank. Pure: computes, never counts down |
 | `src/events.ts` | `pick \| ban \| turnChange \| draftComplete` and a subscription bus |
 | `src/projection.ts` | Per-token filtered views of the room |
-| `src/presets.ts` | Named scripts. The real in-game orders are **not here yet** — see below |
+| `src/presets.ts` | Named scripts, including the default `vg-5v5-standard` |
 | `src/heroes.ts`, `data/heroes.json` | Static roster, checked in, never fetched at runtime |
 
 ```
 npm install
-npm test          # 87 tests
+npm test          # 91 tests
 npm run typecheck
 ```
 
@@ -61,16 +61,30 @@ npm run typecheck
 - **A room stores the resolved script array, not a preset id.** Editing a preset
   cannot change a draft in progress.
 
+## The default format
+
+`vg-5v5-standard`, the script a room gets if the organiser picks nothing:
+
+```
+Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick, Bpick, Apick, Apick, Bpick
+```
+
+Two bans each, then a 1-2-2-2-2-1 snake. Five picks a side, fourteen turns.
+Each pick is its own turn, so a team picking twice in a row gets **two clocks
+and two confirms**. If a double pick should instead be one clock and one
+confirm, that is `Bpick x2` — a one-line change to the preset, and the engine
+already handles it.
+
 ## Blocked, on purpose
 
 Two things in the design cannot be written without information the codebase does
 not have, and guessing either would be worse than leaving them empty:
 
-1. **The real in-game 5v5 and 3v3 ban/pick orders.** `vg-5v5-standard` and
-   `vg-3v3-standard` are declared in `PENDING` in `src/presets.ts` and throw a
-   named error if requested. The `example-*` presets are development
-   placeholders and are flagged `official: false`. See
-   [docs/PRESETS.md](docs/PRESETS.md) — adding a real order is a one-line change.
+1. **The 3v3 ban/pick order.** `vg-3v3-standard` is declared in `PENDING` in
+   `src/presets.ts` and throws a named error if requested; it is not derivable
+   from the 5v5 order. `example-3v3-snake` is a development placeholder flagged
+   `official: false`. See [docs/PRESETS.md](docs/PRESETS.md) — adding the real
+   order is a one-line change.
 2. **Hero roles and attack types.** `data/heroes.json` carries 58 hero names with
    `roles: []` and `attackType: null`, and the file is marked `verified: false`.
    See [docs/HERO_DATA.md](docs/HERO_DATA.md).

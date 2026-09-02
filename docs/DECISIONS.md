@@ -21,14 +21,22 @@ than the risk of reusable ones. Not yet implemented; it belongs to the transport
 slice. Organiser-side revoke/reissue was not chosen and can be added later
 without changing the token model.
 
+**5v5 ban/pick order: supplied, and it is the default.** Two bans each, then a
+1-2-2-2-2-1 snake:
+`Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick, Bpick, Apick, Apick, Bpick`.
+Shipped as `vg-5v5-standard` with `official: true`, and pointed at by
+`DEFAULT_PRESET_ID`. Transcribed as fourteen single-hero turns, so a team picking
+twice in a row gets two clocks and two confirms; the one-clock reading is
+`Bpick x2` and remains a one-line change.
+
 **Frontend: React + Vite.** As assumed in the handoff. A plain SPA over a
 WebSocket to the Durable Object; no SSR, since a room is entirely live state.
 Not yet implemented.
 
 ## Still open
 
-- The real in-game 5v5 and 3v3 ban/pick orders. Blocks `vg-5v5-standard` and
-  `vg-3v3-standard`; see [PRESETS.md](PRESETS.md).
+- The 3v3 ban/pick order. Blocks `vg-3v3-standard`; see [PRESETS.md](PRESETS.md).
+- Whether a double pick in the 5v5 order is two clocks (as shipped) or one.
 - Per-hero roles and attack types. See [HERO_DATA.md](HERO_DATA.md).
 - Which custom format the community actually wants. Mimicking the in-game order
   is the agreed starting point, and it is data, not code.
