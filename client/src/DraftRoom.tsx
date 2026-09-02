@@ -83,9 +83,11 @@ export function DraftRoom({ roomId, token }: Props): JSX.Element {
           <span className={`clock ${onBank ? "bank" : ""} ${remaining <= 5_000 ? "urgent" : ""}`}>
             {clock(remaining)}
           </span>
-          <span className="bank-note">
-            {onBank ? "reserve" : `+${clock(projection.clock?.bank[turn.team] ?? 0)} reserve`}
-          </span>
+          {(projection.clock?.bank[turn.team] ?? 0) > 0 && (
+            <span className="bank-note">
+              {onBank ? "reserve" : `+${clock(projection.clock?.bank[turn.team] ?? 0)} reserve`}
+            </span>
+          )}
         </div>
       )}
 

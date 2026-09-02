@@ -248,6 +248,57 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .links code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .links button { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 4px 10px; }
 
+/* ── phones ─────────────────────────────────────────────────────────────── */
+
 @media (max-width: 860px) {
+  .room { padding: 10px; }
+
   .board { grid-template-columns: 1fr; }
+
+  /* The pool is what a captain is actually here to use: put it first and let
+     the page scroll once, rather than making them scroll past two empty
+     rosters into a panel that scrolls on its own. */
+  .middle { order: -1; }
+  .grid { max-height: none; overflow-y: visible; }
+
+  /* Rosters become compact chip rows: they are reference, not the work. */
+  .team { padding: 10px 12px; }
+  .team h2 { margin-bottom: 6px; }
+  .team h3 { margin: 10px 0 4px; }
+  .picks, .bans { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .picks li, .bans li { padding: 6px; font-size: 13px; justify-content: center; text-align: center; }
+  .picks li span, .bans li span { display: none; }
+  .picks li.filled, .bans li:not(.empty) { position: relative; }
+  /* Keep the auto marker: a dot is enough once the label will not fit. */
+  .picks li .auto, .bans li .auto {
+    display: block;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 5px;
+    height: 5px;
+    padding: 0;
+    border-radius: 50%;
+    background: #ffcc66;
+    border: none;
+    overflow: hidden;
+    text-indent: -99px;
+  }
+
+  .turn { flex-wrap: wrap; gap: 8px 12px; padding: 10px 12px; }
+  .turn-label { font-size: 16px; }
+  .clock { font-size: 26px; }
+
+  /* The confirm bar follows the captain down the pool, so the pool ends above
+     where it sits — a hero permanently hidden behind it is a hero they cannot
+     ban. */
+  .confirm-bar {
+    position: sticky;
+    bottom: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+  }
+  .grid { padding-bottom: 64px; }
+
+  .links li { grid-template-columns: 1fr auto; }
+  .links .link-label { grid-column: 1 / -1; }
 }
