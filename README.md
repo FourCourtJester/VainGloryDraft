@@ -32,12 +32,18 @@ is *derived* from the script. Nothing assumes "five picks a side".
 | `src/projection.ts` | Per-token filtered views of the room |
 | `src/presets.ts` | Named scripts, including the default `vg-5v5-standard` |
 | `src/heroes.ts`, `data/heroes.json` | Static roster, checked in, never fetched at runtime |
+| `src/room/` | Room: engine + clock + tokens + connections. No Cloudflare imports |
+| `worker/` | Durable Object and Worker routes — a thin adapter over `Room` |
 
 ```
 npm install
-npm test          # 91 tests
+npm test          # 121 tests
 npm run typecheck
+npm run dev       # wrangler dev on :8787
+npm run smoke     # end-to-end against a running dev worker, alarm included
 ```
+
+The protocol — routes, messages, phases — is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Design decisions the code enforces
 
@@ -89,9 +95,25 @@ not have, and guessing either would be worse than leaving them empty:
    `roles: []` and `attackType: null`, and the file is marked `verified: false`.
    See [docs/HERO_DATA.md](docs/HERO_DATA.md).
 
+## Where the logic lives
+
+`Room` (`src/room/room.ts`) holds the authoritative state: it decides whose turn
+it is, what a timeout resolves to, when the draft starts, and who may see
+staging. It takes `now` as an argument and imports nothing from Cloudflare, so a
+whole draft — including a clock that expires and an alarm that fires late — is
+tested in milliseconds.
+
+The Durable Object owns only sockets, storage and the alarm. That alarm is the
+reason for the whole choice of platform: it fires **whether or not anyone is
+connected**, so a draft cannot be frozen by closing a laptop, and a room evicted
+mid-draft wakes up and resolves each missed turn at its own deadline rather than
+all at once.
+
+A room sits in a lobby, clock stopped, until both captains connect.
+
 ## Next
 
-Transport (Cloudflare Durable Object, one per room), the turn alarm, reusable
-captain link tokens, then a React + Vite client. All of it wraps the engine; none
-of it changes it. Settled questions are recorded in
+The React + Vite client. The three links a room returns
+(`/r/:roomId?token=…`) are the client's route and 404 until it exists; the
+WebSocket API behind them is done. Settled questions are recorded in
 [docs/DECISIONS.md](docs/DECISIONS.md).

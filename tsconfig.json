@@ -13,7 +13,8 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
+    "types": ["@cloudflare/workers-types"],
     "noEmit": true
   },
-  "include": ["src", "tests", "scripts"]
+  "include": ["src", "tests", "worker"]
 }

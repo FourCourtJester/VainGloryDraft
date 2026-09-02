@@ -33,6 +33,13 @@ twice in a row gets two clocks and two confirms; the one-clock reading is
 WebSocket to the Durable Object; no SSR, since a room is entirely live state.
 Not yet implemented.
 
+**A room waits in a lobby until both captains connect.** Not in the handoff, and
+it had to be decided to build the clock at all: something must say when time
+starts counting. Auto-starting on the second captain's arrival needs no extra
+control and cannot burn a captain's bank before they have the link open. The
+alternative — an explicit organiser "start" — is a later addition that changes
+nothing structural, since the phase already exists.
+
 ## Still open
 
 - The 3v3 ban/pick order. Blocks `vg-3v3-standard`; see [PRESETS.md](PRESETS.md).

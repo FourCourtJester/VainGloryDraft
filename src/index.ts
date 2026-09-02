@@ -7,4 +7,7 @@ export * from "./projection.js";
 export * from "./timer.js";
 export * from "./presets.js";
 export * from "./heroes.js";
+export * from "./room/protocol.js";
+export * from "./room/room.js";
+export * from "./room/tokens.js";
 export { seededRandom, drawDistinct } from "./random.js";
