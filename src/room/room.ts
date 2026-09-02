@@ -21,6 +21,8 @@ import { ALL_HERO_IDS } from "../heroes.js";
 import { defaultScript } from "../presets.js";
 import type { DraftProjection, Presence, TurnClock, Viewer } from "../projection.js";
 import { project } from "../projection.js";
+import type { DraftRecord } from "../record.js";
+import { draftRecord } from "../record.js";
 import { nextAlarmAt, read, settleTurn, startTimer } from "../timer.js";
 import type { TimerRules, TimerState } from "../timer.js";
 import type { AutoFillStrategy, DraftState, Team, TurnScript } from "../types.js";
@@ -206,7 +208,7 @@ export class Room {
         ? stage(before, viewer.team, message.heroId)
         : message.t === "unstage"
           ? unstage(before, viewer.team, message.heroId)
-          : commit(before, viewer.team);
+          : commit(before, viewer.team, now);
 
     if (!result.ok) return refuse(result.error.code, result.error.message, overdue);
 
@@ -241,7 +243,7 @@ export class Room {
       const deadline = nextAlarmAt(this.#snapshot.rules, this.#snapshot.timer, turn.team);
       if (now < deadline) break;
 
-      const auto = resolveTimeout(this.#snapshot.draft);
+      const auto = resolveTimeout(this.#snapshot.draft, deadline);
       if (!auto.ok) break;
       this.#advance(auto.value, deadline);
       resolved = true;
@@ -290,12 +292,21 @@ export class Room {
     };
   }
 
+  /**
+   * The account of this draft in the order it happened, for reading back after
+   * the fact.
+   */
+  record(): DraftRecord {
+    return draftRecord(this.#snapshot.draft, this.#snapshot.createdAt);
+  }
+
   projection(viewer: Viewer, now: number): DraftProjection {
     return project({
       state: this.#snapshot.draft,
       viewer,
       presence: this.presence(),
       clock: this.clock(now),
+      startedAt: this.#snapshot.createdAt,
     });
   }
 

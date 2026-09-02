@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clock, describeTurn, verbFor } from "../client/src/format.js";
+import { clock, describeTurn, duration, verbFor } from "../client/src/format.js";
 
 describe("clock", () => {
   it("counts tenths under ten seconds", () => {
@@ -24,6 +24,24 @@ describe("clock", () => {
   it("pads seconds", () => {
     expect(clock(65_000)).toBe("1:05");
     expect(clock(3_600_000)).toBe("60:00");
+  });
+});
+
+describe("duration", () => {
+  it("reads in seconds while that is still legible", () => {
+    expect(duration(0)).toBe("0.0s");
+    expect(duration(1_050)).toBe("1.1s");
+    expect(duration(59_940)).toBe("59.9s");
+  });
+
+  it("switches to minutes once seconds stop being useful", () => {
+    expect(duration(60_000)).toBe("1m 00s");
+    expect(duration(95_000)).toBe("1m 35s");
+    expect(duration(3_600_000)).toBe("60m 00s");
+  });
+
+  it("never reads as a negative length of time", () => {
+    expect(duration(-1)).toBe("0.0s");
   });
 });
 

@@ -70,7 +70,7 @@ export default {
       return createRoom(request, env, url);
     }
 
-    const room = /^\/api\/rooms\/([A-Za-z0-9_-]+)\/(ws|state)$/.exec(url.pathname);
+    const room = /^\/api\/rooms\/([A-Za-z0-9_-]+)\/(ws|state|record)$/.exec(url.pathname);
     if (room !== null) {
       const [, roomId, route] = room;
       const stub = env.DRAFT_ROOM.get(env.DRAFT_ROOM.idFromName(roomId!));

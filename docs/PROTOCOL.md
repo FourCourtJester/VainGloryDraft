@@ -10,6 +10,7 @@ connect over a WebSocket and are told what they are allowed to see.
 | `POST /api/rooms` | Create a room. Returns `roomId` and the three links. |
 | `GET /api/rooms/:id/ws?token=` | WebSocket upgrade. |
 | `GET /api/rooms/:id/state?token=` | One-shot projection. A fallback for reconnects. |
+| `GET /api/rooms/:id/record?token=` | The whole draft in the order it happened. |
 | `GET /api/heroes` | Static roster, with the `verified` flag. |
 | `GET /api/presets` | Preset list plus the still-`PENDING` ids. |
 
@@ -69,6 +70,37 @@ changes nothing.
   cannot leak it. This is the hook a stats panel or overlay subscribes to.
 - **`error`** goes only to the socket whose command was rejected. A rejected
   command is not persisted and triggers no broadcast.
+
+## What a room keeps, and for how long
+
+A room is saved as it plays, and stays saved. There is no expiry: it lasts until
+somebody deletes it, so a draft can be opened again a week later from the same
+links and read back exactly as it happened.
+
+What is kept is the draft itself — every turn in order, which team, which heroes,
+whether the clock chose them because a captain ran out of time, and the moment
+each turn landed. Nothing else needs recording, because the account of the draft
+is worked out from those turns rather than written separately.
+
+`GET /api/rooms/:id/record` returns it as JSON, for keeping elsewhere:
+
+```jsonc
+{
+  "roomId": "vWsxh4rNyic",
+  "createdAt": 1788345973614,
+  "phase": "complete",
+  "format": "Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick",
+  "mirrorPicks": false,
+  "complete": true,
+  "durationMs": 12900,
+  "autoCounts": { "A": 0, "B": 1 },
+  "turns": [
+    { "number": 1, "team": "A", "action": "ban", "heroes": ["ozo"], "auto": false, "at": 1788345974700, "tookMs": 1086 }
+  ]
+}
+```
+
+Opening a finished room shows the same account on screen, above the board.
 
 ## Phases
 

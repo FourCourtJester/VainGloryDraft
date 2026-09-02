@@ -93,6 +93,15 @@ export interface CommittedTurn {
    * for one that was.
    */
   readonly auto: boolean;
+  /**
+   * When this turn was settled.
+   *
+   * A finished draft is kept, and can be opened again days later to see how it
+   * went. Recording the moment each turn landed means that record shows not
+   * just what was taken and in what order, but how long each side sat on the
+   * decision — which is often the interesting part.
+   */
+  readonly at: number | null;
 }
 
 /**

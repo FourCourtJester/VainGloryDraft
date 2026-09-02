@@ -162,16 +162,17 @@ export function unstage(state: DraftState, team: Team, heroId: string): Result<D
  * Locks in what the captain has chosen and moves the draft on to the next turn.
  *
  * The whole turn is confirmed in one go, so a turn that takes two heroes needs
- * both of them chosen first and then commits the pair together.
+ * both of them chosen first and then commits the pair together. The moment it
+ * happened is recorded with it, so the finished draft can be read back later.
  */
-export function commit(state: DraftState, team: Team): Result<DraftState> {
+export function commit(state: DraftState, team: Team, at: number | null = null): Result<DraftState> {
   const turn = currentTurn(state);
   if (turn === null) return err("draft_complete", "The draft is over.");
   if (turn.team !== team) return err("wrong_team", `It is team ${turn.team}'s turn.`);
   if (state.staged.length !== turn.count) {
     return err("turn_incomplete", `Stage ${turn.count} hero(es) before confirming; ${state.staged.length} staged.`);
   }
-  return ok(applyTurn(state, [...state.staged], false));
+  return ok(applyTurn(state, [...state.staged], false, at));
 }
 
 /**
@@ -208,16 +209,16 @@ export function autoFillSelection(state: DraftState): readonly string[] {
  * This always moves the draft forward while a turn remains. A captain who has
  * chosen nothing at all cannot hold the draft up by doing nothing.
  */
-export function resolveTimeout(state: DraftState): Result<DraftState> {
+export function resolveTimeout(state: DraftState, at: number | null = null): Result<DraftState> {
   const turn = currentTurn(state);
   if (turn === null) return err("draft_complete", "The draft is over.");
-  return ok(applyTurn(state, [...autoFillSelection(state)], true));
+  return ok(applyTurn(state, [...autoFillSelection(state)], true, at));
 }
 
-function applyTurn(state: DraftState, heroes: string[], auto: boolean): DraftState {
+function applyTurn(state: DraftState, heroes: string[], auto: boolean, at: number | null): DraftState {
   const index = currentTurnIndex(state);
   const turn = state.config.script[index]!;
-  const committed: CommittedTurn = { index, team: turn.team, action: turn.action, heroes, auto };
+  const committed: CommittedTurn = { index, team: turn.team, action: turn.action, heroes, auto, at };
   return { ...state, committed: [...state.committed, committed], staged: [] };
 }
 

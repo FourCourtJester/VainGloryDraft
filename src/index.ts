@@ -3,6 +3,7 @@ export * from "./script.js";
 export * from "./config.js";
 export * from "./engine.js";
 export * from "./events.js";
+export * from "./record.js";
 export * from "./projection.js";
 export * from "./timer.js";
 export * from "./presets.js";

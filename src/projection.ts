@@ -16,6 +16,8 @@
  */
 
 import { availability, currentTurn, currentTurnIndex, isComplete, legalHeroes, summarise } from "./engine.js";
+import type { DraftRecord } from "./record.js";
+import { draftRecord } from "./record.js";
 import type { DraftState, HeroAvailability, Team, Turn } from "./types.js";
 
 export type Viewer =
@@ -50,6 +52,8 @@ export interface ProjectionInput {
   readonly viewer: Viewer;
   readonly presence: Presence;
   readonly clock: TurnClock | null;
+  /** When the room was made, used to time the first turn. */
+  readonly startedAt?: number | undefined;
 }
 
 export interface DraftProjection {
@@ -70,6 +74,11 @@ export interface DraftProjection {
   readonly stagedCount: number;
   readonly presence: Presence;
   readonly clock: TurnClock | null;
+  /**
+   * How the draft went, turn by turn, once it is over. Anyone opening the room
+   * later is shown the same account, which is the point of keeping it.
+   */
+  readonly record: DraftRecord | null;
 }
 
 /** Whether this person may see what the team on the clock is considering. */
@@ -81,7 +90,7 @@ export function canSeeStaging(state: DraftState, viewer: Viewer): boolean {
 }
 
 /** Builds one person's view of the draft as it stands. */
-export function project({ state, viewer, presence, clock }: ProjectionInput): DraftProjection {
+export function project({ state, viewer, presence, clock, startedAt }: ProjectionInput): DraftProjection {
   const turn = currentTurn(state);
   const summary = summarise(state);
   const isActiveCaptain = viewer.role === "captain" && turn !== null && turn.team === viewer.team;
@@ -101,5 +110,6 @@ export function project({ state, viewer, presence, clock }: ProjectionInput): Dr
     stagedCount: state.staged.length,
     presence,
     clock,
+    record: isComplete(state) ? draftRecord(state, startedAt ?? null) : null,
   };
 }

@@ -18,6 +18,7 @@
 
 import type { DraftEvent } from "../src/events.js";
 import type { Viewer } from "../src/projection.js";
+import { formatScript } from "../src/script.js";
 import type { ServerMessage } from "../src/room/protocol.js";
 import { parseClientMessage } from "../src/room/protocol.js";
 import type { CreateRoomOptions, RoomOutcome, RoomSnapshot } from "../src/room/room.js";
@@ -84,6 +85,9 @@ export class DraftRoom implements DurableObject {
     if (url.pathname === "/state") {
       return this.#state(url);
     }
+    if (url.pathname === "/record") {
+      return this.#record(url);
+    }
     return json({ error: "Not found." }, 404);
   }
 
@@ -141,6 +145,33 @@ export class DraftRoom implements DurableObject {
     const outcome = room.tick(now);
     await this.#settleIfNeeded(outcome, now);
     return json({ t: "state", phase: room.phase, serverTime: now, projection: room.projection(viewer, now), events: [] });
+  }
+
+  /**
+   * The finished draft as a plain record: every turn in order, who took what,
+   * what the clock had to choose, and how long each side took over it.
+   *
+   * A room keeps its draft indefinitely, so this answers just as well two days
+   * later as it does the moment the last hero is picked.
+   */
+  async #record(url: URL): Promise<Response> {
+    const room = this.#room!;
+    if (room.authenticate(url.searchParams.get("token") ?? "") === null) {
+      return json({ error: "Invalid link." }, 403);
+    }
+    const now = Date.now();
+    const outcome = room.tick(now);
+    await this.#settleIfNeeded(outcome, now);
+
+    const snapshot = room.snapshot;
+    return json({
+      roomId: snapshot.roomId,
+      createdAt: snapshot.createdAt,
+      phase: room.phase,
+      format: formatScript(snapshot.draft.config.script),
+      mirrorPicks: snapshot.draft.config.mirrorPicks,
+      ...room.record(),
+    });
   }
 
   async webSocketMessage(socket: WebSocket, raw: string | ArrayBuffer): Promise<void> {

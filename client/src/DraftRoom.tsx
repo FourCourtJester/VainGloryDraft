@@ -2,6 +2,7 @@ import type { JSX } from "react";
 import { useEffect, useState } from "react";
 import type { Team } from "../../src/types.js";
 import type { Hero } from "../../src/types.js";
+import { DraftHistory } from "./DraftHistory.js";
 import { HeroGrid } from "./HeroGrid.js";
 import { clock, describeTurn, verbFor } from "./format.js";
 import { useNow, useRoom } from "./useRoom.js";
@@ -81,6 +82,7 @@ export function DraftRoom({ roomId, token }: Props): JSX.Element {
         <p className="banner">Waiting for both captains to connect. The clock is not running.</p>
       )}
       {room.phase === "complete" && <p className="banner done">Draft complete.</p>}
+      {projection.record !== null && <DraftHistory record={projection.record} name={name} />}
 
       {running && turn !== null && (
         <div className={`turn ${myTurn ? "mine" : ""}`}>

@@ -96,6 +96,39 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .clock.urgent { color: var(--danger); }
 .bank-note { color: var(--muted); font-size: 13px; }
 
+/* ── how the draft went ─────────────────────────────────────────────────── */
+
+.history {
+  margin: 14px 0;
+  padding: 12px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.history-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.history h2 { margin: 0 0 4px; font-size: 15px; }
+.history-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; }
+.history-turn {
+  display: grid;
+  grid-template-columns: 24px 20px 58px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.history-turn:nth-child(odd) { background: rgba(255, 255, 255, 0.025); }
+.history-number { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.history-turn.team-A .history-team { color: var(--a); font-weight: 600; }
+.history-turn.team-B .history-team { color: var(--b); font-weight: 600; }
+.history-action { color: var(--muted); }
+.history-took { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 860px) {
+  .history-turn { grid-template-columns: 22px 18px 1fr auto; }
+  .history-action { display: none; }
+}
+
 /* ── board ──────────────────────────────────────────────────────────────── */
 
 .board { display: grid; grid-template-columns: 190px 1fr 190px; gap: 16px; margin-top: 8px; }

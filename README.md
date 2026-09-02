@@ -75,6 +75,9 @@ The protocol — routes, messages, phases — is in [docs/PROTOCOL.md](docs/PROT
   subscriber and never surgery on the engine.
 - **A room stores the resolved script array, not a preset id.** Editing a preset
   cannot change a draft in progress.
+- **A finished draft is kept and can be read back.** Every turn is recorded in
+  order, with the time it landed and whether the clock chose it, so opening the
+  room later shows how the draft actually went rather than just its result.
 
 ## The formats
 
@@ -139,9 +142,9 @@ Things a tournament organiser would hit, in rough order of how much they matter:
 
 - **No hero portraits or roles yet.** Waiting on the vgna.net export; the
   importer and the UI are both ready for it.
-- **Rooms are never cleaned up.** A finished room keeps its Durable Object
-  storage indefinitely. Needs a retention rule — an organiser decision as much as
-  a technical one.
+- **Rooms are kept forever.** That is deliberate — a finished draft can be
+  reopened weeks later — but it does mean storage only grows. A retention rule
+  is an organiser decision as much as a technical one.
 - **No organiser controls.** No start button (the room starts itself when both
   captains connect), no remake, no undo. Deliberate for now: a remake is a new
   room, and undo would need a rule about who may call it.
