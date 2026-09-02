@@ -45,10 +45,17 @@ control and cannot burn a captain's bank before they have the link open. The
 alternative — an explicit organiser "start" — is a later addition that changes
 nothing structural, since the phase already exists.
 
-## Still open
+**3v3 order: the 5v5 order, cut short at three a side.** Two bans each, then
+1-2-2-1, with team A picking first and team B last —
+`Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick`. A strict
+prefix of the 5v5 script, and a test asserts that, since the rule it comes from
+is "the same as the fives, but three".
 
-- The 3v3 ban/pick order. Blocks `vg-3v3-standard`; see [PRESETS.md](PRESETS.md).
+## Still open
 - Whether a double pick in the 5v5 order is two clocks (as shipped) or one.
-- Per-hero roles and attack types. See [HERO_DATA.md](HERO_DATA.md).
+- Per-hero roles and icons, pending the vgna.net export. See
+  [HERO_DATA.md](HERO_DATA.md).
+- Whether hero icons are self-hosted or served from vgna.net. The importer
+  self-hosts by default; `--keep-urls` does not.
 - Which custom format the community actually wants. Mimicking the in-game order
   is the agreed starting point, and it is data, not code.

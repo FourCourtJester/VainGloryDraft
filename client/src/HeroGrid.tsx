@@ -77,12 +77,18 @@ export function HeroGrid({ heroes, rolesVerified, projection, interactive, onTog
             <li key={id}>
               <button
                 type="button"
-                className={`hero ${state}${isStaged ? " staged" : ""}`}
+                className={`hero ${state}${isStaged ? " staged" : ""}${hero.image === null ? "" : " has-icon"}`}
                 disabled={!canPick}
                 onClick={() => onToggle(id)}
                 data-hero={id}
                 aria-pressed={isStaged}
               >
+                {hero.image !== null && (
+                  // Decorative: the name beside it is the label. Icons are
+                  // absent until the roster is imported, and the tile still
+                  // reads correctly without one.
+                  <img className="hero-icon" src={hero.image} alt="" loading="lazy" width={28} height={28} />
+                )}
                 <span className="hero-name">{hero.name}</span>
                 {availability.state === "banned" && <span className="tag">banned</span>}
                 {availability.state === "picked" && <span className="tag">{availability.by.join("+")}</span>}

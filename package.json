@@ -15,7 +15,8 @@
     "smoke": "node scripts/smoke.mjs",
     "build": "vite build --config client/vite.config.ts client",
     "dev:client": "vite --config client/vite.config.ts client",
-    "ui-check": "node scripts/ui-check.mjs"
+    "ui-check": "node scripts/ui-check.mjs",
+    "import-heroes": "node scripts/import-heroes.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260902.1",

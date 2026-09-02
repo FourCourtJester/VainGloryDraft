@@ -42,12 +42,20 @@ export function getHero(id: string): Hero | undefined {
 export const ALL_HERO_IDS: readonly string[] = HEROES.map((hero) => hero.id);
 
 /**
- * True when role/attackType data has been verified against a real source.
- * The UI should not offer role filtering while this is false — a filter over
- * invented data is worse than no filter.
+ * True when every hero's role has been taken from a real source. The UI must not
+ * offer role filtering while this is false — a filter over invented or partial
+ * data is worse than no filter.
+ *
+ * Attack type is optional extra and deliberately does not gate this: an export
+ * that carries roles but no attack type is still trustworthy for filtering.
  */
 export const HERO_DATA_VERIFIED = file.verified;
 
-export function heroesMissingMetadata(): readonly Hero[] {
-  return HEROES.filter((hero) => hero.roles.length === 0 || hero.attackType === null);
+export function heroesMissingRoles(): readonly Hero[] {
+  return HEROES.filter((hero) => hero.roles.length === 0);
+}
+
+/** Every role in the roster, sorted. Empty until roles are imported. */
+export function allRoles(): readonly string[] {
+  return [...new Set(HEROES.flatMap((hero) => hero.roles))].sort();
 }

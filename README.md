@@ -76,7 +76,7 @@ The protocol — routes, messages, phases — is in [docs/PROTOCOL.md](docs/PROT
 - **A room stores the resolved script array, not a preset id.** Editing a preset
   cannot change a draft in progress.
 
-## The default format
+## The formats
 
 `vg-5v5-standard`, the script a room gets if the organiser picks nothing:
 
@@ -85,24 +85,25 @@ Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick, Bpick, Apick, 
 ```
 
 Two bans each, then a 1-2-2-2-2-1 snake. Five picks a side, fourteen turns.
+`vg-3v3-standard` is the same script with the snake cut short at three a side —
+a strict prefix of it, which is what "the same as the fives, but three" means.
 Each pick is its own turn, so a team picking twice in a row gets **two clocks
 and two confirms**. If a double pick should instead be one clock and one
 confirm, that is `Bpick x2` — a one-line change to the preset, and the engine
 already handles it.
 
-## Blocked, on purpose
+## Waiting on data
 
-Two things in the design cannot be written without information the codebase does
-not have, and guessing either would be worse than leaving them empty:
+`data/heroes.json` carries 58 hero names with `roles: []` and no icons, and is
+marked `verified: false` — the UI will not offer a role filter over data it
+cannot trust. A vgna.net export drops straight in:
 
-1. **The 3v3 ban/pick order.** `vg-3v3-standard` is declared in `PENDING` in
-   `src/presets.ts` and throws a named error if requested; it is not derivable
-   from the 5v5 order. `example-3v3-snake` is a development placeholder flagged
-   `official: false`. See [docs/PRESETS.md](docs/PRESETS.md) — adding the real
-   order is a one-line change.
-2. **Hero roles and attack types.** `data/heroes.json` carries 58 hero names with
-   `roles: []` and `attackType: null`, and the file is marked `verified: false`.
-   See [docs/HERO_DATA.md](docs/HERO_DATA.md).
+```
+npm run import-heroes -- vgna-heroes.json
+```
+
+See [docs/HERO_DATA.md](docs/HERO_DATA.md). Both draft formats are in and
+confirmed; nothing else is blocked.
 
 ## Where the logic lives
 
@@ -136,10 +137,8 @@ clock chose must never look like one a captain chose.
 
 Things a tournament organiser would hit, in rough order of how much they matter:
 
-- **No hero portraits.** `image` is `null` for every hero, so the pool is a text
-  grid. The handoff calls for self-hosted portraits; that needs the scrape in
-  [docs/HERO_DATA.md](docs/HERO_DATA.md), which this environment could not run.
-- **No 3v3 preset.** Blocked on the real order, as above.
+- **No hero portraits or roles yet.** Waiting on the vgna.net export; the
+  importer and the UI are both ready for it.
 - **Rooms are never cleaned up.** A finished room keeps its Durable Object
   storage indefinitely. Needs a retention rule — an organiser decision as much as
   a technical one.

@@ -180,7 +180,19 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .hero.picked-B { opacity: 0.55; border-color: var(--b); }
 /* Mirror picks: both teams hold this hero. */
 .hero.picked-AB { opacity: 0.55; border-color: var(--muted); }
-.hero-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.hero-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: #232836;
+  flex: none;
+}
+.hero.has-icon { gap: 8px; }
+/* A banned or taken hero reads as unavailable at a glance, portrait included. */
+.hero.banned .hero-icon { filter: grayscale(1); }
+.hero.picked-A .hero-icon, .hero.picked-B .hero-icon, .hero.picked-AB .hero-icon { filter: grayscale(0.6); }
 .tag { font-size: 10px; text-transform: uppercase; color: var(--muted); }
 
 /* ── confirm ────────────────────────────────────────────────────────────── */

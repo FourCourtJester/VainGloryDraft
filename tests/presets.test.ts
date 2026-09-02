@@ -29,16 +29,42 @@ describe("presets", () => {
   });
 
   it("resolves to a copy, so a room cannot be changed by editing a preset", () => {
-    const first = resolveScript("example-3v3-snake") as unknown[];
+    const first = resolveScript("vg-3v3-standard") as unknown[];
     first.push({ team: "A", action: "ban", count: 1 });
-    expect(resolveScript("example-3v3-snake")).toHaveLength(getPreset("example-3v3-snake")!.script.length);
+    expect(resolveScript("vg-3v3-standard")).toHaveLength(getPreset("vg-3v3-standard")!.script.length);
   });
 
-  it("refuses a preset that is still blocked on the real in-game order", () => {
-    for (const pending of PENDING) {
-      expect(getPreset(pending.id)).toBeUndefined();
-      expect(() => resolveScript(pending.id)).toThrow(/not available yet/);
+  it("ships the 3v3 order as the 5v5 shape cut short at three a side", () => {
+    expect(formatScript(resolveScript("vg-3v3-standard"))).toBe(
+      "Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick",
+    );
+    const totals = deriveTotals(resolveScript("vg-3v3-standard"));
+    expect(totals.turns).toBe(10);
+    expect(totals.byTeam.A).toEqual({ picks: 3, bans: 2 });
+    expect(totals.byTeam.B).toEqual({ picks: 3, bans: 2 });
+  });
+
+  it("gives team A the first pick and team B the last, in both formats", () => {
+    for (const id of ["vg-5v5-standard", "vg-3v3-standard"]) {
+      const picks = resolveScript(id).filter((turn) => turn.action === "pick");
+      expect(picks.at(0)?.team).toBe("A");
+      expect(picks.at(-1)?.team).toBe("B");
     }
+  });
+
+  it("shares its opening with the 5v5 order, which is what makes it the same format", () => {
+    const threes = resolveScript("vg-3v3-standard");
+    const fives = resolveScript("vg-5v5-standard");
+    expect(fives.slice(0, threes.length)).toEqual(threes);
+  });
+
+  it("has nothing left blocked", () => {
+    expect(PENDING).toEqual([]);
+  });
+
+  it("refuses a preset id that does not exist, rather than falling back", () => {
+    expect(getPreset("vg-2v2-standard")).toBeUndefined();
+    expect(() => resolveScript("vg-2v2-standard")).toThrow(/Unknown preset/);
   });
 
   it("ships the supplied 5v5 order verbatim", () => {
@@ -66,9 +92,9 @@ describe("presets", () => {
     expect(defaultScript()).toEqual(getPreset("vg-5v5-standard")!.script);
   });
 
-  it("marks a placeholder script as unofficial", () => {
+  it("ships only confirmed formats", () => {
     // A placeholder must never be offered to a tournament as "standard".
-    expect(getPreset("example-3v3-snake")!.official).toBe(false);
+    expect(PRESETS.every((preset) => preset.official)).toBe(true);
   });
 
   it("reports an unknown preset clearly", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ALL_HERO_IDS, HEROES, HERO_DATA_VERIFIED, getHero, heroesMissingMetadata } from "../src/heroes.js";
+import { ALL_HERO_IDS, HEROES, HERO_DATA_VERIFIED, allRoles, getHero, heroesMissingRoles } from "../src/heroes.js";
 
 describe("hero data", () => {
   it("has a unique, slug-shaped id for every hero", () => {
@@ -21,13 +21,18 @@ describe("hero data", () => {
     expect(HEROES.length).toBeGreaterThanOrEqual(30);
   });
 
-  it("declares itself unverified while roles are unfilled", () => {
-    // Guards the handoff rule: never invent role data. When roles are scraped
-    // properly this test is the reminder to flip the flag.
-    if (!HERO_DATA_VERIFIED) {
-      expect(heroesMissingMetadata().length).toBeGreaterThan(0);
+  it("claims verified only when every hero has a role", () => {
+    // Guards the handoff rule: never invent role data. The flag is what lets the
+    // UI offer a role filter, so it must never run ahead of the data.
+    if (HERO_DATA_VERIFIED) {
+      expect(heroesMissingRoles()).toEqual([]);
+      expect(allRoles().length).toBeGreaterThan(0);
     } else {
-      expect(heroesMissingMetadata()).toEqual([]);
+      expect(heroesMissingRoles().length).toBeGreaterThan(0);
     }
+  });
+
+  it("derives the role list from the roster rather than a hardcoded set", () => {
+    expect(allRoles()).toEqual([...new Set(HEROES.flatMap((hero) => hero.roles))].sort());
   });
 });

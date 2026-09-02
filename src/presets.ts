@@ -4,9 +4,8 @@
  * A room stores the *resolved array*, never the preset id: a draft in progress
  * must not change because someone edited a preset afterwards.
  *
- * `vg-5v5-standard` is the supplied default order. `vg-3v3-standard` is still
- * in `PENDING`: the 3v3 order has not been given, and it is not guessable from
- * the 5v5 one. See docs/PRESETS.md.
+ * `vg-5v5-standard` is the default. `vg-3v3-standard` is the same shape with the
+ * pick snake cut short at three a side. See docs/PRESETS.md.
  */
 
 import { formatScript, parseScript } from "./script.js";
@@ -29,9 +28,7 @@ export interface Preset {
 }
 
 /** Preset ids that are known to be needed but cannot be written yet. */
-export const PENDING: readonly { readonly id: string; readonly format: DraftFormat; readonly blockedOn: string }[] = [
-  { id: "vg-3v3-standard", format: "3v3", blockedOn: "3v3 ban/pick order not supplied. Not derivable from the 5v5 order." },
-];
+export const PENDING: readonly { readonly id: string; readonly format: DraftFormat; readonly blockedOn: string }[] = [];
 
 function preset(
   id: string,
@@ -57,12 +54,13 @@ export const PRESETS: readonly Preset[] = [
       "clocks and two confirms rather than staging both together.",
   ),
   preset(
-    "example-3v3-snake",
-    "Example 3v3 (placeholder)",
+    "vg-3v3-standard",
+    "Vainglory 3v3 Standard",
     "3v3",
-    false,
-    "Aban, Bban, Apick, Bpick x2, Apick x2, Bpick",
-    "Invented for development, and the only 3v3 script there is. Replace with vg-3v3-standard once the real order is supplied.",
+    true,
+    "Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick",
+    "The 5v5 order with the pick snake cut short at three a side: two bans each, " +
+      "then 1-2-2-1. Team A picks first, team B picks last. Each pick is its own turn.",
   ),
 ];
 
