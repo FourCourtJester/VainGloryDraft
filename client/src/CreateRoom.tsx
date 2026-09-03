@@ -7,6 +7,7 @@ interface PresetSummary {
   readonly format: string;
   readonly official: boolean;
   readonly turns: number;
+  readonly teamSize: number;
   readonly notes: string | null;
 }
 
@@ -20,8 +21,8 @@ interface Created {
   readonly roomId: string;
   readonly codes: { readonly A: string; readonly B: string };
   readonly links: {
-    readonly captainA: string;
-    readonly captainB: string;
+    readonly teamA: string;
+    readonly teamB: string;
     readonly spectator: string;
     readonly join: string;
   };
@@ -38,6 +39,9 @@ export function CreateRoom(): JSX.Element {
   const [mirrorPicks, setMirrorPicks] = useState(false);
   const [perTurnSeconds, setPerTurnSeconds] = useState(30);
   const [bankSeconds, setBankSeconds] = useState(60);
+  // How many players a side waits for. Follows the format unless the organiser
+  // says otherwise — a captains-only draft is one a side.
+  const [teamSize, setTeamSize] = useState<number | null>(null);
   const [room, setRoom] = useState<Created | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,6 +68,7 @@ export function CreateRoom(): JSX.Element {
           mirrorPicks,
           perTurnMs: perTurnSeconds * 1000,
           bankMs: bankSeconds * 1000,
+          teamSize: teamSize ?? undefined,
         }),
       });
       const data = (await response.json()) as Created & { error?: string };
@@ -87,16 +92,17 @@ export function CreateRoom(): JSX.Element {
         </header>
         <h1>Room {room.roomId}</h1>
         <p className="note">
-          Send each captain their own link. The draft starts when both captains have connected — until then
-          the clock is not running.
+          Send each side its own link. Everyone on a team uses the same one; the first to arrive does the
+          picking and can hand that job to a teammate. The draft starts once every player is ready — until
+          then the clock is not running.
         </p>
         <ul className="links">
-          <LinkRow label="Captain A" href={room.links.captainA} code={room.codes.A} />
-          <LinkRow label="Captain B" href={room.links.captainB} code={room.codes.B} />
+          <LinkRow label="Team A" href={room.links.teamA} code={room.codes.A} />
+          <LinkRow label="Team B" href={room.links.teamB} code={room.codes.B} />
           <LinkRow label="Spectators" href={room.links.spectator} />
         </ul>
         <p className="note">
-          A captain's link carries their code, so tapping it is enough. If it is easier to read the code out,
+          A team's link carries its code, so tapping it is enough. If it is easier to read the code out,
           send them <code>{room.links.join}</code> and the six characters instead.
         </p>
         <p className="note">
@@ -146,6 +152,20 @@ export function CreateRoom(): JSX.Element {
       </label>
 
       <label>
+        Players per side
+        <input
+          type="number"
+          min={1}
+          max={10}
+          value={teamSize ?? chosen?.teamSize ?? 5}
+          onChange={(event) => setTeamSize(Number(event.target.value))}
+        />
+      </label>
+      <p className="note">
+        Everyone joins before the draft begins. Set this to 1 if only the two captains are turning up.
+      </p>
+
+      <label>
         Seconds per turn
         <input
           type="number"
@@ -168,7 +188,7 @@ export function CreateRoom(): JSX.Element {
       </label>
 
       <p className="note">
-        There is no pause. If a captain drops, the clock keeps running and the room decides what to do.
+        There is no pause. If somebody drops, the clock keeps running and the room decides what to do.
       </p>
 
       <button type="button" className="confirm" disabled={busy} onClick={() => void create()}>
@@ -179,7 +199,7 @@ export function CreateRoom(): JSX.Element {
   );
 }
 
-/** One link, with a button to copy it, ready to paste to a captain. */
+/** One link, with a button to copy it, ready to paste to a team. */
 function LinkRow({
   label,
   href,

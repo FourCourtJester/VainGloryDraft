@@ -21,7 +21,7 @@ import { draftRecord } from "./record.js";
 import type { DraftState, HeroAvailability, Team, Turn } from "./types.js";
 
 export type Viewer =
-  | { readonly role: "captain"; readonly team: Team }
+  | { readonly role: "player"; readonly team: Team; readonly memberId: string }
   | { readonly role: "spectator" };
 
 export type ConnectionStatus = "connected" | "disconnected";
@@ -47,11 +47,31 @@ export interface TurnClock {
   readonly expiresAt: number;
 }
 
+/** One person in the room, as everybody else sees them. */
+export interface MemberView {
+  readonly id: string;
+  readonly name: string;
+  readonly team: Team;
+  readonly ready: boolean;
+  readonly connected: boolean;
+  readonly leader: boolean;
+  /** True for the person this view is being built for. */
+  readonly you: boolean;
+}
+
+export interface LobbyView {
+  readonly teamSize: number;
+  readonly members: readonly MemberView[];
+  readonly everyoneHere: boolean;
+  readonly everyoneReady: boolean;
+}
+
 export interface ProjectionInput {
   readonly state: DraftState;
   readonly viewer: Viewer;
   readonly presence: Presence;
   readonly clock: TurnClock | null;
+  readonly lobby: LobbyView;
   /** When the room was made, used to time the first turn. */
   readonly startedAt?: number | undefined;
 }
@@ -74,6 +94,10 @@ export interface DraftProjection {
   readonly stagedCount: number;
   readonly presence: Presence;
   readonly clock: TurnClock | null;
+  /** Everybody in the room, whether they are ready, and who is leading each side. */
+  readonly lobby: LobbyView;
+  /** True when this viewer is the one who picks and bans for their side. */
+  readonly leading: boolean;
   /**
    * How the draft went, turn by turn, once it is over. Anyone opening the room
    * later is shown the same account, which is the point of keeping it.
@@ -86,14 +110,17 @@ export function canSeeStaging(state: DraftState, viewer: Viewer): boolean {
   const turn = currentTurn(state);
   if (turn === null) return false;
   if (viewer.role === "spectator") return true;
+  // Your own side may watch you deliberate; the other side may not.
   return viewer.team === turn.team;
 }
 
 /** Builds one person's view of the draft as it stands. */
-export function project({ state, viewer, presence, clock, startedAt }: ProjectionInput): DraftProjection {
+export function project({ state, viewer, presence, clock, lobby, startedAt }: ProjectionInput): DraftProjection {
   const turn = currentTurn(state);
   const summary = summarise(state);
-  const isActiveCaptain = viewer.role === "captain" && turn !== null && turn.team === viewer.team;
+  const leading = viewer.role === "player" && lobby.members.some((m) => m.you && m.leader);
+  // Only the person leading the side on the clock may actually choose.
+  const canAct = leading && turn !== null && viewer.role === "player" && turn.team === viewer.team;
 
   return {
     viewer,
@@ -105,11 +132,13 @@ export function project({ state, viewer, presence, clock, startedAt }: Projectio
     picks: summary.picks,
     bans: summary.bans,
     heroes: state.config.heroPool.map((id) => ({ id, availability: availability(state, id) })),
-    selectable: isActiveCaptain ? legalHeroes(state) : [],
+    selectable: canAct ? legalHeroes(state) : [],
     staged: canSeeStaging(state, viewer) ? [...state.staged] : null,
     stagedCount: state.staged.length,
     presence,
     clock,
+    lobby,
+    leading,
     record: isComplete(state) ? draftRecord(state, startedAt ?? null) : null,
   };
 }

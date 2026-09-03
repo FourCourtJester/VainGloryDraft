@@ -25,18 +25,21 @@ const created = await fetch(`${BASE}/api/rooms`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   // A deliberately tiny clock so the alarm can be observed in a few seconds.
-  body: JSON.stringify({ perTurnMs: 2000, bankMs: 1000 }),
+  body: JSON.stringify({ perTurnMs: 2000, bankMs: 1000, teamSize: 1 }),
 });
 const room = await created.json();
 console.log(`room ${room.roomId}`);
 
 const state = {};
+let joined = 0;
 function connect(name, link) {
   // A captain's link carries their code; a spectator's carries a token.
   const url = new URL(link);
   const token = url.searchParams.get("token") ?? url.searchParams.get("code");
   return new Promise((resolve) => {
-    const socket = new WebSocket(`${BASE.replace("http", "ws")}/api/rooms/${room.roomId}/ws?token=${token}`);
+    // Players bring an id and a name; a spectator brings neither.
+    const identity = url.searchParams.has("code") ? `&player=smoke-player-${++joined}&name=${name}` : "";
+    const socket = new WebSocket(`${BASE.replace("http", "ws")}/api/rooms/${room.roomId}/ws?token=${token}${identity}`);
     socket.addEventListener("message", (event) => {
       const message = JSON.parse(event.data);
       if (message.t === "state") state[name] = message;
@@ -46,30 +49,37 @@ function connect(name, link) {
   });
 }
 
-const a = await connect("A", room.links.captainA);
+const a = await connect("A", room.links.teamA);
 const s = await connect("S", room.links.spectator);
 await wait(200);
-check("stays in the lobby until both captains arrive", state.A.phase, "lobby");
+check("stays in the lobby while players arrive", state.A.phase, "lobby");
 
-const b = await connect("B", room.links.captainB);
+const b = await connect("B", room.links.teamB);
 await wait(200);
-check("starts once both captains are connected", state.A.phase, "drafting");
+check("does not start merely because both sides are present", state.A.phase, "lobby");
+
+a.send(JSON.stringify({ t: "ready", ready: true }));
+await wait(150);
+check("nor when only one side has confirmed", state.A.phase, "lobby");
+b.send(JSON.stringify({ t: "ready", ready: true }));
+await wait(250);
+check("starts once every player is ready", state.A.phase, "drafting");
 
 const bad = await fetch(`${BASE}/api/rooms/${room.roomId}/state?code=NONSEN`);
 check("rejects a code that is not this room's", bad.status, 403);
 
 a.send(JSON.stringify({ t: "stage", heroId: "ozo" }));
 await wait(200);
-check("the acting captain sees their own staging", state.A.projection.staged, ["ozo"]);
+check("the side on the clock sees its own staging", state.A.projection.staged, ["ozo"]);
 check("spectators see the active team's staging", state.S.projection.staged, ["ozo"]);
-check("the opposing captain does not", state.B.projection.staged, null);
+check("the opposing side does not", state.B.projection.staged, null);
 check("but does see the slot count", state.B.projection.stagedCount, 1);
 
 b.send(JSON.stringify({ t: "stage", heroId: "ozo" }));
 a.send(JSON.stringify({ t: "stage", heroId: "not-a-hero" }));
 a.send(JSON.stringify({ t: "nonsense" }));
 await wait(200);
-check("rejects the captain who is not on the clock", state["B:error"], "wrong_team");
+check("rejects the side that is not on the clock", state["B:error"], "wrong_team");
 check("rejects an unrecognised message", state["A:error"], "bad_message");
 
 a.send(JSON.stringify({ t: "confirm" }));
@@ -84,7 +94,7 @@ check("and moved the draft on", state.S.projection.turn, { team: "A", action: "b
 
 a.close();
 await wait(300);
-check("shows a captain as disconnected without pausing", state.S.projection.presence, {
+check("shows a side as disconnected without pausing", state.S.projection.presence, {
   A: "disconnected",
   B: "connected",
 });

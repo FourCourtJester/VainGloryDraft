@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { playerId } from "./identity.js";
 import type { ClientMessage, RoomError, RoomPhase, ServerMessage } from "../../src/room/protocol.js";
 import type { DraftProjection, Viewer } from "../../src/projection.js";
 
@@ -37,7 +38,7 @@ const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 15_000];
  * carries on without this screen, so coming back is simply a matter of asking
  * the room where things have got to and drawing that.
  */
-export function useRoom(roomId: string, token: string): RoomView {
+export function useRoom(roomId: string, token: string, playerName?: string): RoomView {
   const [link, setLink] = useState<Link>("connecting");
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [phase, setPhase] = useState<RoomPhase | null>(null);
@@ -57,7 +58,13 @@ export function useRoom(roomId: string, token: string): RoomView {
 
     const open = (): void => {
       const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-      const url = `${scheme}://${window.location.host}/api/rooms/${roomId}/ws?token=${encodeURIComponent(token)}`;
+      // The player id comes from this browser, so reconnecting is recognised as
+      // the same person rather than as somebody new arriving.
+      const identity =
+        playerName === undefined
+          ? ""
+          : `&player=${encodeURIComponent(playerId())}&name=${encodeURIComponent(playerName)}`;
+      const url = `${scheme}://${window.location.host}/api/rooms/${roomId}/ws?token=${encodeURIComponent(token)}${identity}`;
       const socket = new WebSocket(url);
       socketRef.current = socket;
       setLink("connecting");
@@ -127,7 +134,7 @@ export function useRoom(roomId: string, token: string): RoomView {
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [roomId, token]);
+  }, [roomId, token, playerName]);
 
   const send = useCallback((message: ClientMessage) => {
     const socket = socketRef.current;

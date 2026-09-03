@@ -36,11 +36,11 @@ to `random` rather than being stored.
 A room hands out two kinds of credential, because the two audiences want
 opposite things.
 
-**Captains get a six-character code** — `9YZ6P7` — drawn from an alphabet with no
+**Players get a six-character code**, one per side, shared by that whole team — `9YZ6P7` — drawn from an alphabet with no
 characters that get confused when read aloud (no O/0, no I/L/1). It arrives in
 their link, so tapping it is enough, and it can be typed at `/r/:roomId` by
 anyone who was given the code some other way. Case and stray spaces are
-forgiven.
+forgiven. A player also gives a name, so their side knows who is who.
 
 **Everyone else gets a long spectator link** and no code. Watching is not worth
 protecting, and a link that can be pasted into a channel is worth a lot.
@@ -78,7 +78,7 @@ can either paste a link or read a code out:
 ```jsonc
 { "roomId": "d0jdFJPePKM",
   "codes": { "A": "9YZ6P7", "B": "QADXBU" },
-  "links": { "captainA": "…?code=9YZ6P7", "captainB": "…?code=QADXBU",
+  "links": { "teamA": "…?code=9YZ6P7", "teamB": "…?code=QADXBU",
              "spectator": "…?token=99tXdNC0NnTHe0cRIRi3EQ", "join": "…/r/d0jdFJPePKM" } }
 ```
 
@@ -89,6 +89,9 @@ can either paste a link or read a code out:
 { "t": "unstage", "heroId": "ozo" }
 { "t": "confirm" }                     // commits the whole staged turn at once
 { "t": "resync" }                      // "send me the current state"
+{ "t": "ready",     "ready": true }    // "I am ready", or taking that back
+{ "t": "handOver",  "memberId": "A:…" } // the leader giving the job to a teammate
+{ "t": "claimLead" }                   // a teammate stepping in for an absent leader
 ```
 
 Anything else is answered with `{"t":"error","error":{"code":"bad_message"}}` and
@@ -145,13 +148,35 @@ is worked out from those turns rather than written separately.
 
 Opening a finished room shows the same account on screen, above the board.
 
+## Who is in the room
+
+Everyone on a side joins with the same code. The **first to arrive leads** —
+they are the only one who can pick and ban — and they can hand that job to a
+teammate at any time, before or during the draft. If the person leading is not
+connected, a teammate may take over; while they are connected, nobody can take
+it from them.
+
+A player is remembered by an id their browser keeps, so somebody whose phone
+dies comes back as themselves: same side, still leading if they were. The id is
+scoped to the side, so one browser can hold both team links without the second
+one arriving as the first.
+
+Teammates see their own side's staging. The opposing side never does.
+
 ## Phases
 
 `lobby → drafting → complete`
 
-A room sits in `lobby`, clock stopped, until **both captains have connected**;
-time spent waiting costs nobody anything. Commands in the lobby are refused with
-`not_started`. `complete` stops the clock and clears the alarm.
+A room sits in `lobby`, clock stopped, until **every player is present and has
+said they are ready**. Both sides being full is not enough on its own: ten people
+staring at a loading screen is exactly when somebody is still finding their
+headset. Time spent waiting costs nobody anything, and readiness can be taken
+back. Draft commands in the lobby are refused with `not_started`. `complete`
+stops the clock and clears the alarm.
+
+How many players a side waits for comes from the format — a draft where each
+team picks five heroes is played by five people — and `teamSize` on room creation
+overrides it. Set it to 1 for a draft where only the two captains turn up.
 
 ## The clock
 

@@ -20,9 +20,21 @@ export type ClientMessage =
   | { readonly t: "stage"; readonly heroId: string }
   | { readonly t: "unstage"; readonly heroId: string }
   | { readonly t: "confirm" }
-  | { readonly t: "resync" };
+  | { readonly t: "resync" }
+  /** "I am ready for the draft to begin", or taking that back. */
+  | { readonly t: "ready"; readonly ready: boolean }
+  /** The leader giving the job to a teammate. */
+  | { readonly t: "handOver"; readonly memberId: string }
+  /** A teammate stepping in when the leader is not connected. */
+  | { readonly t: "claimLead" };
 
-export type RoomErrorCode = DraftErrorCode | "not_started" | "not_a_captain" | "bad_message";
+export type RoomErrorCode =
+  | DraftErrorCode
+  | "not_started"
+  | "not_a_player"
+  | "bad_message"
+  | "not_your_call"
+  | "leader_present";
 
 export interface RoomError {
   readonly code: RoomErrorCode;
@@ -60,14 +72,20 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   }
   if (typeof parsed !== "object" || parsed === null) return null;
 
-  const message = parsed as { t?: unknown; heroId?: unknown };
+  const message = parsed as { t?: unknown; heroId?: unknown; ready?: unknown; memberId?: unknown };
   switch (message.t) {
     case "confirm":
     case "resync":
       return { t: message.t };
+    case "claimLead":
+      return { t: "claimLead" };
     case "stage":
     case "unstage":
       return typeof message.heroId === "string" ? { t: message.t, heroId: message.heroId } : null;
+    case "ready":
+      return typeof message.ready === "boolean" ? { t: "ready", ready: message.ready } : null;
+    case "handOver":
+      return typeof message.memberId === "string" ? { t: "handOver", memberId: message.memberId } : null;
     default:
       return null;
   }

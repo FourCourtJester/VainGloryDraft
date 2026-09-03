@@ -76,10 +76,17 @@ The protocol — routes, messages, phases — is in [docs/PROTOCOL.md](docs/PROT
 - **The engine does not know consumers exist.** Events are derived by comparing
   two states (`diffEvents`), so a stats panel, an overlay or a webhook is a new
   subscriber and never surgery on the engine.
-- **Captains get a short code, spectators get a link.** A code is six characters
-  that can be read out over voice, carried in a link for one tap, or typed. Wrong
-  codes are counted and the room stops answering after a handful, so something
-  that short cannot simply be guessed at.
+- **Each side gets a short code, spectators get a link.** A code is six
+  characters that can be read out over voice, carried in a link for one tap, or
+  typed. Wrong codes are counted and the room stops answering after a handful,
+  so something that short cannot simply be guessed at.
+- **A whole squad joins, and one of them picks.** Everyone on a team uses the
+  same code; the first to arrive leads and can hand that job to a teammate, or
+  have it taken over if they drop. Teammates watch their own side deliberate;
+  the opposing side cannot.
+- **The draft starts on a ready check**, not on a connection. Every player has to
+  be present and confirm, so nobody's clock burns while their team is still
+  arriving.
 - **A room stores the resolved script array, not a preset id.** Editing a preset
   cannot change a draft in progress.
 - **A finished draft is kept and can be read back.** Every turn is recorded in
@@ -129,7 +136,8 @@ connected**, so a draft cannot be frozen by closing a laptop, and a room evicted
 mid-draft wakes up and resolves each missed turn at its own deadline rather than
 all at once.
 
-A room sits in a lobby, clock stopped, until both captains connect.
+A room sits in a lobby, clock stopped, until every player has arrived and
+confirmed they are ready.
 
 ## The client
 

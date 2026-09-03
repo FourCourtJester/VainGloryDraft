@@ -14,19 +14,40 @@ import "./styles.css";
 function App(): ReturnType<typeof CreateRoom> {
   const match = /^\/r\/([A-Za-z0-9_-]+)\/?$/.exec(window.location.pathname);
   const params = new URLSearchParams(window.location.search);
-  // A spectator link carries a token; a captain's carries their code. Either
-  // way it is in the address, and either way it can be typed instead.
-  const fromUrl = params.get("token") ?? params.get("code");
-  const [entered, setEntered] = useState<string | null>(null);
+  // A watch link carries a token; a team link carries a code. Either can also
+  // be typed, and a player gives a name so their side knows who is who.
+  const token = params.get("token");
+  const codeFromUrl = params.get("code");
+  const [joined, setJoined] = useState<{ code: string; name: string } | null>(null);
 
   if (match === null) return <CreateRoom />;
-
   const roomId = match[1]!;
-  const credential = entered ?? fromUrl;
-  if (credential === null) {
-    return <JoinRoom roomId={roomId} onJoin={setEntered} refused={null} />;
+
+  // Watching needs nothing but the link.
+  if (token !== null && joined === null) {
+    return <DraftRoom roomId={roomId} credential={token} />;
   }
-  return <DraftRoom key={credential} roomId={roomId} token={credential} onCredential={setEntered} />;
+
+  if (joined === null) {
+    return (
+      <JoinRoom
+        roomId={roomId}
+        code={codeFromUrl ?? undefined}
+        refused={null}
+        onJoin={(code, name) => setJoined({ code, name })}
+      />
+    );
+  }
+
+  return (
+    <DraftRoom
+      key={`${joined.code}:${joined.name}`}
+      roomId={roomId}
+      credential={joined.code}
+      name={joined.name}
+      onRejoin={(code, name) => setJoined({ code, name })}
+    />
+  );
 }
 
 createRoot(document.getElementById("root")!).render(

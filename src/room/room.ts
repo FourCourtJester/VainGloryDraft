@@ -19,7 +19,8 @@ import type { DraftEvent } from "../events.js";
 import { diffEvents } from "../events.js";
 import { ALL_HERO_IDS } from "../heroes.js";
 import { defaultScript } from "../presets.js";
-import type { DraftProjection, Presence, TurnClock, Viewer } from "../projection.js";
+import { deriveTotals } from "../script.js";
+import type { DraftProjection, LobbyView, MemberView, Presence, TurnClock, Viewer } from "../projection.js";
 import { project } from "../projection.js";
 import type { DraftRecord } from "../record.js";
 import { draftRecord } from "../record.js";
@@ -27,8 +28,30 @@ import { nextAlarmAt, read, settleTurn, startTimer } from "../timer.js";
 import type { TimerRules, TimerState } from "../timer.js";
 import type { AutoFillStrategy, DraftState, Team, TurnScript } from "../types.js";
 import type { ClientMessage, RoomError, RoomPhase } from "./protocol.js";
+import type { Roster } from "./roster.js";
+import {
+  claimLead,
+  emptyRoster,
+  everyoneHere,
+  everyoneReady,
+  findMember,
+  handOver,
+  join as joinRoster,
+  setReady,
+  teamMembers,
+} from "./roster.js";
 import type { RoomCredentials } from "./tokens.js";
 import { credentialsMatch, generateCredentials, generateToken, normaliseCode } from "./tokens.js";
+
+/**
+ * How many players a side has, taken from the format itself: a draft where each
+ * team picks five heroes is played by five people. A room can say otherwise if
+ * some format ever breaks that rule.
+ */
+function playersPerTeam(script: DraftState["config"]["script"]): number {
+  const totals = deriveTotals(script);
+  return Math.max(1, totals.byTeam.A.picks, totals.byTeam.B.picks);
+}
 
 /** Wrong codes tolerated before the room stops answering, and for how long. */
 const MAX_FAILURES = 8;
@@ -46,6 +69,8 @@ export interface CreateRoomOptions {
   readonly roomId?: string;
   readonly seed?: string;
   readonly callbackUrl?: string | null;
+  /** How many players a side has. Taken from the format unless given. */
+  readonly teamSize?: number;
   readonly credentials?: RoomCredentials;
 }
 
@@ -68,6 +93,8 @@ export interface RoomSnapshot {
    * somebody clearly is.
    */
   readonly failures: { readonly count: number; readonly since: number };
+  /** Who is in the room, who leads each side, and how many each side waits for. */
+  readonly roster: Roster;
   /** Where to report the finished draft, if whoever made the room asked for that. */
   readonly callbackUrl: string | null;
   /** Set once the finished draft has been reported, so it is not sent twice. */
@@ -134,6 +161,7 @@ export class Room {
       rules,
       credentials: options.credentials ?? generateCredentials(),
       failures: { count: 0, since: now },
+      roster: emptyRoster(options.teamSize ?? playersPerTeam(draft.value.config.script)),
       callbackUrl: options.callbackUrl ?? null,
       reported: false,
     };
@@ -157,15 +185,15 @@ export class Room {
    * long enough that it needs no such protection, and is checked first so that
    * watchers are never caught by a lockout somebody else caused.
    */
-  authenticate(credential: string, now: number = Date.now()): Viewer | null {
+  authenticate(credential: string, now: number = Date.now()): Team | "spectator" | null {
     const { credentials } = this.#snapshot;
-    if (credentialsMatch(credential, credentials.spectator)) return { role: "spectator" };
+    if (credentialsMatch(credential, credentials.spectator)) return "spectator";
 
     if (this.lockedOut(now)) return null;
 
     const code = normaliseCode(credential);
-    if (credentialsMatch(code, credentials.A)) return this.#accept({ role: "captain", team: "A" }, now);
-    if (credentialsMatch(code, credentials.B)) return this.#accept({ role: "captain", team: "B" }, now);
+    if (credentialsMatch(code, credentials.A)) return this.#accept("A", now);
+    if (credentialsMatch(code, credentials.B)) return this.#accept("B", now);
 
     this.#recordFailure(now);
     return null;
@@ -183,12 +211,31 @@ export class Room {
     return this.lockedOut(now) ? this.#snapshot.failures.since + FAILURE_WINDOW_MS : null;
   }
 
-  #accept(viewer: Viewer, now: number): Viewer {
-    // A captain who gets in clears the slate: the failures were their typing.
+  #accept<T>(seat: T, now: number): T {
+    // Somebody getting in clears the slate: the failures were their typing.
     if (this.#snapshot.failures.count > 0) {
       this.#snapshot = { ...this.#snapshot, failures: { count: 0, since: now } };
     }
-    return viewer;
+    return seat;
+  }
+
+  /**
+   * Seats a player on their side, or recognises one coming back.
+   *
+   * The first to arrive on a team leads it. Anybody returning keeps what they
+   * had — their place, and the lead if it was theirs — so a dropped phone never
+   * costs somebody the job mid-draft.
+   */
+  seat(team: Team, playerId: string, name: string, now: number): Viewer {
+    // Scope the id to the side. A browser remembers one id, so without this an
+    // organiser with both team links open would join as one person twice, and
+    // the second side would never fill up.
+    const memberId = `${team}:${playerId}`;
+    this.#snapshot = {
+      ...this.#snapshot,
+      roster: joinRoster(this.#snapshot.roster, { id: memberId, name, team }, now),
+    };
+    return { role: "player", team, memberId };
   }
 
   #recordFailure(now: number): void {
@@ -231,27 +278,61 @@ export class Room {
     return { events: overdue.events, error: null, changed: true };
   }
 
-  presence(): Presence {
-    const teams = new Set<Team>();
+  /** Which member ids currently have a live connection. */
+  #connectedIds(): Set<string> {
+    const ids = new Set<string>();
     for (const viewer of this.#connections.values()) {
-      if (viewer.role === "captain") teams.add(viewer.team);
+      if (viewer.role === "player") ids.add(viewer.memberId);
     }
-    return { A: teams.has("A") ? "connected" : "disconnected", B: teams.has("B") ? "connected" : "disconnected" };
+    return ids;
   }
 
   /**
-   * Starts the draft once both captains are actually there.
+   * Whether each side's leader is connected — the indicator the room watches
+   * when somebody goes quiet mid-draft.
+   */
+  presence(): Presence {
+    const connected = this.#connectedIds();
+    const here = (team: Team): boolean => {
+      const leader = this.#snapshot.roster.leaders[team];
+      return leader !== null && connected.has(leader);
+    };
+    return { A: here("A") ? "connected" : "disconnected", B: here("B") ? "connected" : "disconnected" };
+  }
+
+  /** The room as everybody in it should see it: who is here, ready, and leading. */
+  lobby(forMemberId: string | null): LobbyView {
+    const { roster } = this.#snapshot;
+    const connected = this.#connectedIds();
+    const members: MemberView[] = roster.members.map((member) => ({
+      id: member.id,
+      name: member.name,
+      team: member.team,
+      ready: member.ready,
+      connected: connected.has(member.id),
+      leader: roster.leaders[member.team] === member.id,
+      you: member.id === forMemberId,
+    }));
+    return {
+      teamSize: roster.teamSize,
+      members,
+      everyoneHere: everyoneHere(roster),
+      everyoneReady: everyoneReady(roster),
+    };
+  }
+
+  /**
+   * Starts the draft once every player is in the room and has said they are
+   * ready.
    *
-   * Nobody's time should tick away while they are still finding their link, so a
-   * room waits, however long that takes, and starts the clock only when both
-   * captains are present to play against it.
+   * Nobody's time should tick away while their team is still arriving, so the
+   * room waits however long that takes. Both sides being full is not enough on
+   * its own: ten people staring at a loading screen is exactly when somebody is
+   * still finding their headset.
    */
   #maybeStart(now: number): RoomOutcome {
     if (this.#snapshot.phase !== "lobby") return { events: [], error: null, changed: true };
-    const presence = this.presence();
-    if (presence.A !== "connected" || presence.B !== "connected") {
-      return { events: [], error: null, changed: true };
-    }
+    if (!everyoneReady(this.#snapshot.roster)) return { events: [], error: null, changed: true };
     this.#snapshot = { ...this.#snapshot, phase: "drafting", timer: startTimer(this.#snapshot.rules, now) };
     return { events: [], error: null, changed: true };
   }
@@ -264,14 +345,45 @@ export class Room {
     // a moment too late must not be allowed to beat the clock.
     const overdue = this.tick(now);
 
-    if (viewer.role !== "captain") {
-      return refuse("not_a_captain", "Spectators cannot act in the draft.", overdue);
+    // Anyone in the room may ready up or move the lead around, whether or not a
+    // draft is under way; only players, though — watching is watching.
+    if (viewer.role !== "player") {
+      return refuse("not_a_player", "Spectators cannot take part in the draft.", overdue);
     }
+
+    if (message.t === "ready") {
+      this.#snapshot = { ...this.#snapshot, roster: setReady(this.#snapshot.roster, viewer.memberId, message.ready) };
+      const started = this.#maybeStart(now);
+      return { events: [...overdue.events, ...started.events], error: null, changed: true };
+    }
+
+    if (message.t === "handOver") {
+      const moved = handOver(this.#snapshot.roster, viewer.memberId, message.memberId);
+      if (moved === null) {
+        return refuse("not_your_call", "Only your side's leader can hand the job on, and only to a teammate.", overdue);
+      }
+      this.#snapshot = { ...this.#snapshot, roster: moved };
+      return { events: overdue.events, error: null, changed: true };
+    }
+
+    if (message.t === "claimLead") {
+      const claimed = claimLead(this.#snapshot.roster, viewer.memberId, this.#connectedIds());
+      if (claimed === null) {
+        return refuse("leader_present", "Your side already has a leader who is connected.", overdue);
+      }
+      this.#snapshot = { ...this.#snapshot, roster: claimed };
+      return { events: overdue.events, error: null, changed: true };
+    }
+
     if (this.#snapshot.phase === "lobby") {
       return refuse("not_started", "The draft has not started: both captains must connect.", overdue);
     }
     if (this.#snapshot.phase === "complete") {
       return refuse("draft_complete", "The draft is over.", overdue);
+    }
+
+    if (this.#snapshot.roster.leaders[viewer.team] !== viewer.memberId) {
+      return refuse("not_your_call", "Your side's leader makes the picks.", overdue);
     }
 
     const before = this.#snapshot.draft;
@@ -378,6 +490,7 @@ export class Room {
       viewer,
       presence: this.presence(),
       clock: this.clock(now),
+      lobby: this.lobby(viewer.role === "player" ? viewer.memberId : null),
       startedAt: this.#snapshot.createdAt,
     });
   }

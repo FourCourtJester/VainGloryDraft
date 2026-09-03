@@ -14,8 +14,8 @@ const CONFIG: DraftConfig = {
 };
 
 const PRESENCE: Presence = { A: "connected", B: "disconnected" };
-const CAPTAIN_A: Viewer = { role: "captain", team: "A" };
-const CAPTAIN_B: Viewer = { role: "captain", team: "B" };
+const CAPTAIN_A: Viewer = { role: "player", team: "A", memberId: "a1" };
+const CAPTAIN_B: Viewer = { role: "player", team: "B", memberId: "b1" };
 const SPECTATOR: Viewer = { role: "spectator" };
 
 function must<T>(r: Result<T>): T {
@@ -23,8 +23,17 @@ function must<T>(r: Result<T>): T {
   return r.value;
 }
 
+/** Both sides full, both leaders, everybody ready — the state during a draft. */
+function lobbyFor(viewer: Viewer) {
+  const member = (id: string, team: "A" | "B") => ({
+    id, name: id.toUpperCase(), team, ready: true, connected: true, leader: true,
+    you: viewer.role === "player" && viewer.memberId === id,
+  });
+  return { teamSize: 1, members: [member("a1", "A"), member("b1", "B")], everyoneHere: true, everyoneReady: true };
+}
+
 function view(state: DraftState, viewer: Viewer) {
-  return project({ state, viewer, presence: PRESENCE, clock: null });
+  return project({ state, viewer, presence: PRESENCE, clock: null, lobby: lobbyFor(viewer) });
 }
 
 function play(state: DraftState, ...heroes: string[]): DraftState {
@@ -108,7 +117,9 @@ describe("shared view", () => {
 
   it("passes the clock through untouched so clients derive their own countdown", () => {
     const clock = { turnStartedAt: 1_000, perTurnMs: 30_000, bank: { A: 60_000, B: 60_000 }, expiresAt: 91_000 };
-    const projection = project({ state: must(createDraft(CONFIG)), viewer: SPECTATOR, presence: PRESENCE, clock });
+    const projection = project({
+      state: must(createDraft(CONFIG)), viewer: SPECTATOR, presence: PRESENCE, clock, lobby: lobbyFor(SPECTATOR),
+    });
     expect(projection.clock).toEqual(clock);
   });
 });

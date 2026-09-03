@@ -1,18 +1,21 @@
 import type { JSX } from "react";
 import { useEffect, useState } from "react";
-import type { Team } from "../../src/types.js";
-import type { Hero } from "../../src/types.js";
+import type { DraftProjection } from "../../src/projection.js";
+import type { Hero, Team } from "../../src/types.js";
 import { DraftHistory } from "./DraftHistory.js";
 import { HeroGrid } from "./HeroGrid.js";
 import { JoinRoom } from "./JoinRoom.js";
+import { Lobby } from "./Lobby.js";
 import { clock, describeTurn, verbFor } from "./format.js";
 import { useNow, useRoom } from "./useRoom.js";
 
 interface Props {
   readonly roomId: string;
-  readonly token: string;
+  readonly credential: string;
+  /** What this player's teammates should see. Absent for spectators. */
+  readonly name?: string | undefined;
   /** Hands a freshly typed code back up, after the last one was turned away. */
-  readonly onCredential?: ((code: string) => void) | undefined;
+  readonly onRejoin?: ((code: string, name: string) => void) | undefined;
 }
 
 interface HeroFile {
@@ -28,8 +31,8 @@ interface HeroFile {
  * whose turn it is and how much time is left are all told to it by the room, so
  * there is no second copy of the rules here to fall out of step.
  */
-export function DraftRoom({ roomId, token, onCredential }: Props): JSX.Element {
-  const room = useRoom(roomId, token);
+export function DraftRoom({ roomId, credential, name: playerName, onRejoin }: Props): JSX.Element {
+  const room = useRoom(roomId, credential, playerName);
   const [heroData, setHeroData] = useState<HeroFile | null>(null);
 
   useEffect(() => {
@@ -44,7 +47,7 @@ export function DraftRoom({ roomId, token, onCredential }: Props): JSX.Element {
   const now = useNow(running) + room.skewMs;
 
   if (room.refused !== null) {
-    return <JoinRoom roomId={roomId} onJoin={(code) => onCredential?.(code)} refused={room.refused} />;
+    return <JoinRoom roomId={roomId} onJoin={(code, who) => onRejoin?.(code, who)} refused={room.refused} />;
   }
 
   if (projection === null || heroData === null) {
@@ -57,7 +60,8 @@ export function DraftRoom({ roomId, token, onCredential }: Props): JSX.Element {
 
   const viewer = room.viewer;
   const turn = projection.turn;
-  const myTurn = viewer?.role === "captain" && turn !== null && turn.team === viewer.team && running;
+  // Only the person leading the side on the clock may actually choose.
+  const myTurn = projection.leading && turn !== null && viewer?.role === "player" && turn.team === viewer.team && running;
   const heroesById = new Map(heroData.heroes.map((hero) => [hero.id, hero]));
   const name = (id: string): string => heroesById.get(id)?.name ?? id;
 
@@ -73,7 +77,11 @@ export function DraftRoom({ roomId, token, onCredential }: Props): JSX.Element {
           <img className="mark" src="/logo.svg" alt="Vainglory Draft" width={26} height={26} />
           <span className="room-id">Room {roomId}</span>
           <span className={`badge ${viewer?.role ?? ""}`}>
-            {viewer === null ? "…" : viewer.role === "captain" ? `Captain ${viewer.team}` : "Spectator"}
+            {viewer === null
+              ? "…"
+              : viewer.role === "spectator"
+                ? "Spectator"
+                : `Team ${viewer.team}${projection.leading ? " · picking" : ""}`}
           </span>
         </div>
         <div className="link-state">
@@ -87,7 +95,12 @@ export function DraftRoom({ roomId, token, onCredential }: Props): JSX.Element {
       </header>
 
       {room.phase === "lobby" && (
-        <p className="banner">Waiting for both captains to connect. The clock is not running.</p>
+        <Lobby
+          projection={projection}
+          onReady={(ready) => room.send({ t: "ready", ready })}
+          onHandOver={(memberId) => room.send({ t: "handOver", memberId })}
+          onClaimLead={() => room.send({ t: "claimLead" })}
+        />
       )}
       {room.phase === "complete" && <p className="banner done">Draft complete.</p>}
       {projection.record !== null && <DraftHistory record={projection.record} name={name} />}
@@ -107,6 +120,14 @@ export function DraftRoom({ roomId, token, onCredential }: Props): JSX.Element {
             </span>
           )}
         </div>
+      )}
+
+      {running && viewer?.role === "player" && (
+        <TeamStrip
+          projection={projection}
+          onHandOver={(memberId) => room.send({ t: "handOver", memberId })}
+          onClaimLead={() => room.send({ t: "claimLead" })}
+        />
       )}
 
       <div className="board">
@@ -149,6 +170,44 @@ export function DraftRoom({ roomId, token, onCredential }: Props): JSX.Element {
       {room.error !== null && (
         <button type="button" className="toast" onClick={room.dismissError}>
           {room.error.message}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Your own squad, while the draft runs: who is here, and who is picking. */
+function TeamStrip({
+  projection,
+  onHandOver,
+  onClaimLead,
+}: {
+  readonly projection: DraftProjection;
+  readonly onHandOver: (memberId: string) => void;
+  readonly onClaimLead: () => void;
+}): JSX.Element | null {
+  const you = projection.lobby.members.find((member) => member.you);
+  if (you === undefined) return null;
+  const mates = projection.lobby.members.filter((member) => member.team === you.team);
+  const leaderGone = mates.some((member) => member.leader && !member.connected);
+
+  return (
+    <div className={`strip team-${you.team}`}>
+      <span className="note">Your side</span>
+      {mates.map((member) => (
+        <span key={member.id} className={`chip${member.connected ? "" : " away"}${member.leader ? " lead" : ""}`}>
+          {member.name}
+          {member.leader && " · picking"}
+          {you.leader && !member.leader && (
+            <button type="button" className="hand-over" onClick={() => onHandOver(member.id)}>
+              hand over
+            </button>
+          )}
+        </span>
+      ))}
+      {leaderGone && !you.leader && (
+        <button type="button" className="claim" onClick={onClaimLead}>
+          Take over picking
         </button>
       )}
     </div>

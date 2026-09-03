@@ -97,6 +97,73 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .clock.urgent { color: var(--danger); }
 .bank-note { color: var(--muted); font-size: 13px; }
 
+/* ── the lobby ──────────────────────────────────────────────────────────── */
+
+.lobby {
+  margin: 14px 0;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.lobby-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+.lobby h2 { margin: 0; font-size: 16px; }
+
+.squads { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.squad h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; }
+.squad.team-A h3 { color: var(--a); }
+.squad.team-B h3 { color: var(--b); }
+.squad ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.squad li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: #232836;
+  font-size: 14px;
+}
+.squad li.away { opacity: 0.5; }
+.squad li.empty { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
+.squad .who { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.squad .who em { color: var(--muted); font-style: normal; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); flex: none; }
+.dot.ready { background: var(--live); }
+.tag.lead { color: var(--live); border: 1px solid var(--live); border-radius: 4px; padding: 0 5px; font-size: 10px; }
+
+.hand-over, .claim {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.hand-over:hover, .claim:hover { color: var(--text); border-color: var(--a); }
+.claim { margin-top: 8px; }
+
+.ready-bar { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+.ready-off { background: transparent; color: var(--text); border-color: var(--line); }
+
+/* Your own squad, alongside the draft. */
+.strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; }
+.strip .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+.strip .chip.away { opacity: 0.5; }
+.strip .chip.lead { border-color: var(--live); }
+
+@media (max-width: 860px) {
+  .squads { grid-template-columns: 1fr; }
+}
+
 /* ── how the draft went ─────────────────────────────────────────────────── */
 
 .history {

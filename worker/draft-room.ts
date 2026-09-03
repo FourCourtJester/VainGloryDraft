@@ -113,8 +113,16 @@ export class DraftRoom implements DurableObject {
       return json({ error: "Expected a WebSocket upgrade." }, 426);
     }
     const room = this.#room!;
-    const viewer = room.authenticate(credentialFrom(url));
-    if (viewer === null) return json(refusal(room), 403);
+    const seat = room.authenticate(credentialFrom(url));
+    if (seat === null) return json(refusal(room), 403);
+
+    const now = Date.now();
+    // A player brings an id their browser remembers, so coming back is
+    // recognised as them rather than as somebody new.
+    const viewer =
+      seat === "spectator"
+        ? ({ role: "spectator" } as const)
+        : room.seat(seat, memberIdFrom(url), nameFrom(url), now);
 
     const pair = new WebSocketPair();
     const client = pair[0];
@@ -126,7 +134,6 @@ export class DraftRoom implements DurableObject {
     server.serializeAttachment({ connectionId, viewer } satisfies SocketAttachment);
     this.#ctx.acceptWebSocket(server);
 
-    const now = Date.now();
     const outcome = room.attach(connectionId, viewer, now);
     send(server, { t: "welcome", roomId: room.snapshot.roomId, viewer });
     // Save before letting the connection loose: if this is the arrival that
@@ -138,10 +145,15 @@ export class DraftRoom implements DurableObject {
 
   async #state(url: URL): Promise<Response> {
     const room = this.#room!;
-    const viewer = room.authenticate(credentialFrom(url));
-    if (viewer === null) return json(refusal(room), 403);
+    const seat = room.authenticate(credentialFrom(url));
+    if (seat === null) return json(refusal(room), 403);
 
     const now = Date.now();
+    // Looking is not joining: a peek over HTTP never seats anybody.
+    const viewer: Viewer =
+      seat === "spectator"
+        ? { role: "spectator" }
+        : { role: "player", team: seat, memberId: `${seat}:${memberIdFrom(url)}` };
     const outcome = room.tick(now);
     await this.#settleIfNeeded(outcome, now);
     return json({ t: "state", phase: room.phase, serverTime: now, projection: room.projection(viewer, now), events: [] });
@@ -306,6 +318,18 @@ export class DraftRoom implements DurableObject {
 /** A code or a spectator token, from wherever the link happened to carry it. */
 function credentialFrom(url: URL): string {
   return url.searchParams.get("token") ?? url.searchParams.get("code") ?? "";
+}
+
+/** The id a player's browser keeps for them, so a reconnect is recognised. */
+function memberIdFrom(url: URL): string {
+  const given = url.searchParams.get("player") ?? "";
+  return /^[A-Za-z0-9_-]{6,64}$/.test(given) ? given : crypto.randomUUID();
+}
+
+/** What a player asked to be called, trimmed to something a roster can show. */
+function nameFrom(url: URL): string {
+  const given = (url.searchParams.get("name") ?? "").trim().slice(0, 24);
+  return given === "" ? "Player" : given;
 }
 
 /** Says no, and says whether it is worth trying again yet. */

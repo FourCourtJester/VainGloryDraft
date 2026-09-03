@@ -16,7 +16,7 @@ import { PENDING, PRESETS } from "../src/presets.js";
 import { parseAutoFill, parseTimerRules } from "../src/room/options.js";
 import type { CreateRoomOptions } from "../src/room/room.js";
 import { credentialsMatch, generateToken } from "../src/room/tokens.js";
-import { parseScript } from "../src/script.js";
+import { deriveTotals, parseScript } from "../src/script.js";
 import { resolveScript } from "../src/presets.js";
 
 export { DraftRoom } from "./draft-room.js";
@@ -42,6 +42,13 @@ interface CreateRoomRequest {
   readonly bankMs?: number;
   /** Where to POST the finished draft, for a bot that wants telling. */
   readonly callbackUrl?: string;
+  /**
+   * How many players a side waits for before the ready check. Defaults to the
+   * number of heroes the format has that side pick — five for a 5v5 — so a room
+   * normally works this out for itself. Set it to 1 for a draft where only the
+   * two captains turn up.
+   */
+  readonly teamSize?: number;
 }
 
 const CORS = {
@@ -68,6 +75,8 @@ export default {
           format: preset.format,
           official: preset.official,
           turns: preset.script.length,
+          // How many players a side has, if the format is played as intended.
+          teamSize: Math.max(1, deriveTotals(preset.script).byTeam.A.picks, deriveTotals(preset.script).byTeam.B.picks),
           notes: preset.notes ?? null,
         })),
         pending: PENDING,
@@ -128,6 +137,11 @@ async function createRoom(request: Request, env: Env, url: URL): Promise<Respons
     return json({ error: problems.map((problem) => problem.message).join(" ") }, 400);
   }
 
+  const teamSize = body.teamSize;
+  if (teamSize !== undefined && (!Number.isInteger(teamSize) || teamSize < 1 || teamSize > 10)) {
+    return json({ error: "teamSize must be a whole number between 1 and 10." }, 400);
+  }
+
   const callbackUrl = body.callbackUrl ?? undefined;
   if (callbackUrl !== undefined && !/^https:\/\//.test(callbackUrl)) {
     return json({ error: "callbackUrl must be an https address." }, 400);
@@ -142,6 +156,7 @@ async function createRoom(request: Request, env: Env, url: URL): Promise<Respons
       autoFill: parseAutoFill(body.autoFill) ?? "random",
       rules,
       callbackUrl: callbackUrl ?? null,
+      ...(teamSize === undefined ? {} : { teamSize }),
     };
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Invalid room options." }, 400);
@@ -156,14 +171,14 @@ async function createRoom(request: Request, env: Env, url: URL): Promise<Respons
     credentials: { A: string; B: string; spectator: string };
   };
 
-  // A captain's link carries their code so that tapping it is enough, and the
-  // code is handed back on its own for a bot that would rather read it out.
+  // A team's link carries its code so that tapping it is enough, and the code
+  // is handed back on its own for a bot that would rather read it out.
   return json({
     roomId,
     codes: { A: credentials.A, B: credentials.B },
     links: {
-      captainA: `${url.origin}/r/${roomId}?code=${credentials.A}`,
-      captainB: `${url.origin}/r/${roomId}?code=${credentials.B}`,
+      teamA: `${url.origin}/r/${roomId}?code=${credentials.A}`,
+      teamB: `${url.origin}/r/${roomId}?code=${credentials.B}`,
       spectator: `${url.origin}/r/${roomId}?token=${credentials.spectator}`,
       join: `${url.origin}/r/${roomId}`,
     },
