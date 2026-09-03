@@ -73,6 +73,12 @@ export function CreateRoom(): JSX.Element {
   if (room !== null) {
     return (
       <main className="create">
+        <header className="brand">
+          <img src="/logo.svg" alt="" width={44} height={44} />
+          <span>
+            <strong>Vainglory</strong> Draft
+          </span>
+        </header>
         <h1>Room {room.roomId}</h1>
         <p className="note">
           Send each captain their own link. The draft starts when both captains have connected — until then
@@ -94,6 +100,12 @@ export function CreateRoom(): JSX.Element {
 
   return (
     <main className="create">
+      <header className="brand">
+        <img src="/logo.svg" alt="" width={44} height={44} />
+        <span>
+          <strong>Vainglory</strong> Draft
+        </span>
+      </header>
       <h1>New draft</h1>
 
       <label>

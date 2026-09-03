@@ -37,6 +37,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 }
 
 .identity { display: flex; align-items: center; gap: 10px; }
+.identity .mark { display: block; }
 .room-id { color: var(--muted); }
 
 .badge {
@@ -274,6 +275,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 
 .create { max-width: 640px; margin: 0 auto; padding: 32px 16px; display: grid; gap: 14px; }
 .create h1 { margin: 0; font-size: 24px; }
+.brand { display: flex; align-items: center; gap: 12px; font-size: 20px; letter-spacing: 0.01em; }
+.brand strong { font-weight: 700; }
+.brand span { color: var(--muted); }
+.brand strong { color: var(--text); }
 .create label { display: grid; gap: 6px; font-size: 14px; }
 .create label.row { display: flex; align-items: center; gap: 8px; }
 .create .confirm { margin: 6px 0 0; justify-self: start; }

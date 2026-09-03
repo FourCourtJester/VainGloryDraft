@@ -63,6 +63,7 @@ export function DraftRoom({ roomId, token }: Props): JSX.Element {
     <div className="room">
       <header>
         <div className="identity">
+          <img className="mark" src="/logo.svg" alt="Vainglory Draft" width={26} height={26} />
           <span className="room-id">Room {roomId}</span>
           <span className={`badge ${viewer?.role ?? ""}`}>
             {viewer === null ? "…" : viewer.role === "captain" ? `Captain ${viewer.team}` : "Spectator"}

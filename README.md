@@ -1,5 +1,7 @@
 # VainGloryDraft
 
+![Vainglory Draft](client/public/logo-wordmark.png)
+
 A tool for running custom pick/ban drafts for Vainglory, aimed at tournament
 organisers and their captains. 5v5 and 3v3 run on the same engine.
 
@@ -36,6 +38,7 @@ is *derived* from the script. Nothing assumes "five picks a side".
 | `src/room/` | Room: engine + clock + tokens + connections. No Cloudflare imports |
 | `worker/` | Durable Object and Worker routes — a thin adapter over `Room` |
 | `client/` | React + Vite SPA: the create screen and the draft room |
+| `scripts/make-logo.mjs` | Draws the mark and every icon size — see [docs/BRAND.md](docs/BRAND.md) |
 
 ```
 npm install

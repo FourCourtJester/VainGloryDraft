@@ -1,0 +1,11 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 160" width="720" height="160">
+  
+  <g transform="translate(48 16)">
+    <path d="M14 14 L62 14 C92 14 114 36 114 64 C114 92 92 114 62 114 L14 114 Z" fill="#4aa3ff"/><path d="M41 34 L54 34 L66 72 L78 34 L91 34 L72 92 L60 92 Z" fill="#ff7a59"/>
+  </g>
+  <text x="200" y="76" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif"
+        font-size="46" font-weight="700" letter-spacing="1" fill="#e6e9ef">VAINGLORY</text>
+  <text x="202" y="122" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif"
+        font-size="34" font-weight="400" letter-spacing="14" fill="#e6e9ef" opacity="0.7">DRAFT</text>
+</svg>
