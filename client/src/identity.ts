@@ -10,6 +10,8 @@
  * reconnect, not an account.
  */
 
+import { autoName } from "../../src/room/names.js";
+
 const ID_KEY = "vgd.player.id";
 const NAME_KEY = "vgd.player.name";
 
@@ -39,8 +41,12 @@ export function playerId(): string {
   return made;
 }
 
-export function rememberedName(): string {
-  return read(NAME_KEY) ?? "";
+/**
+ * The name to show this player, which is theirs if they have ever typed one and
+ * otherwise a generated one that will be the same for them every time.
+ */
+export function suggestedName(): string {
+  return read(NAME_KEY) ?? autoName(playerId());
 }
 
 export function rememberName(name: string): void {

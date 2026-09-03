@@ -122,7 +122,7 @@ export class DraftRoom implements DurableObject {
     const viewer =
       seat === "spectator"
         ? ({ role: "spectator" } as const)
-        : room.seat(seat, memberIdFrom(url), nameFrom(url), now);
+        : room.seat(seat, memberIdFrom(url), url.searchParams.get("name") ?? "", now);
 
     const pair = new WebSocketPair();
     const client = pair[0];
@@ -180,6 +180,7 @@ export class DraftRoom implements DurableObject {
       phase: room.phase,
       format: formatScript(snapshot.draft.config.script),
       mirrorPicks: snapshot.draft.config.mirrorPicks,
+      players: room.players(),
       ...room.record(),
     });
   }
@@ -274,6 +275,7 @@ export class DraftRoom implements DurableObject {
       createdAt: snapshot.createdAt,
       phase: room.phase,
       format: formatScript(snapshot.draft.config.script),
+      players: room.players(),
       ...room.record(),
     });
 
@@ -324,12 +326,6 @@ function credentialFrom(url: URL): string {
 function memberIdFrom(url: URL): string {
   const given = url.searchParams.get("player") ?? "";
   return /^[A-Za-z0-9_-]{6,64}$/.test(given) ? given : crypto.randomUUID();
-}
-
-/** What a player asked to be called, trimmed to something a roster can show. */
-function nameFrom(url: URL): string {
-  const given = (url.searchParams.get("name") ?? "").trim().slice(0, 24);
-  return given === "" ? "Player" : given;
 }
 
 /** Says no, and says whether it is worth trying again yet. */

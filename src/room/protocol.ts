@@ -26,7 +26,12 @@ export type ClientMessage =
   /** The leader giving the job to a teammate. */
   | { readonly t: "handOver"; readonly memberId: string }
   /** A teammate stepping in when the leader is not connected. */
-  | { readonly t: "claimLead" };
+  | { readonly t: "claimLead" }
+  /**
+   * A side's leader agreeing to begin without a full room. Both sides' leaders
+   * have to say so, which is how a tournament gets past a no-show.
+   */
+  | { readonly t: "startAnyway"; readonly agreed: boolean };
 
 export type RoomErrorCode =
   | DraftErrorCode
@@ -72,13 +77,21 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   }
   if (typeof parsed !== "object" || parsed === null) return null;
 
-  const message = parsed as { t?: unknown; heroId?: unknown; ready?: unknown; memberId?: unknown };
+  const message = parsed as {
+    t?: unknown;
+    heroId?: unknown;
+    ready?: unknown;
+    memberId?: unknown;
+    agreed?: unknown;
+  };
   switch (message.t) {
     case "confirm":
     case "resync":
       return { t: message.t };
     case "claimLead":
       return { t: "claimLead" };
+    case "startAnyway":
+      return typeof message.agreed === "boolean" ? { t: "startAnyway", agreed: message.agreed } : null;
     case "stage":
     case "unstage":
       return typeof message.heroId === "string" ? { t: message.t, heroId: message.heroId } : null;

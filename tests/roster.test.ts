@@ -8,8 +8,10 @@ import {
   join,
   leave,
   leaderOf,
+  passOnAbandonedLead,
   setReady,
   teamMembers,
+  touch,
 } from "../src/room/roster.js";
 import type { Roster } from "../src/room/roster.js";
 
@@ -133,5 +135,38 @@ describe("the ready check", () => {
     for (const m of roster.members) roster = setReady(roster, m.id, true);
     expect(everyoneReady(roster)).toBe(true);
     expect(everyoneReady(setReady(roster, "b1", false))).toBe(false);
+  });
+});
+
+describe("a lead nobody is holding", () => {
+  const GRACE = 45_000;
+  // withTeams seats a0..a2 and b0..b2, so a0 and b0 lead.
+  const allConnected = new Set(["a0", "a1", "a2", "b0", "b1", "b2"]);
+  const without = (...gone: string[]) => new Set([...allConnected].filter((id) => !gone.includes(id)));
+
+  it("passes to the longest-serving connected teammate once the leader has been gone a while", () => {
+    const passed = passOnAbandonedLead(withTeams(3, 3), without("a0"), T0 + GRACE + 1, GRACE);
+    expect(passed!.leaders.A).toBe("a1");
+    expect(passed!.leaders.B).toBe("b0");
+  });
+
+  it("waits out a blip rather than taking the job off somebody", () => {
+    expect(passOnAbandonedLead(withTeams(3, 3), without("a0"), T0 + 5_000, GRACE)).toBeNull();
+  });
+
+  it("leaves it alone while the leader is connected", () => {
+    expect(passOnAbandonedLead(withTeams(3, 3), allConnected, T0 + GRACE * 10, GRACE)).toBeNull();
+  });
+
+  it("keeps it where it is when the whole side has gone", () => {
+    const passed = passOnAbandonedLead(withTeams(3, 3), without("a0", "a1", "a2"), T0 + GRACE * 10, GRACE);
+    expect(passed?.leaders.A ?? "a0").toBe("a0");
+  });
+
+  it("counts from when they were last seen, not from when they joined", () => {
+    const roster = touch(withTeams(3, 3), allConnected, T0 + 10 * 60_000);
+    const seenAt = T0 + 10 * 60_000;
+    expect(passOnAbandonedLead(roster, without("a0"), seenAt + 1_000, GRACE)).toBeNull();
+    expect(passOnAbandonedLead(roster, without("a0"), seenAt + GRACE + 1, GRACE)?.leaders.A).toBe("a1");
   });
 });

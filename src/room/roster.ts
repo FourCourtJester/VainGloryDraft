@@ -20,8 +20,10 @@ export interface Member {
   readonly name: string;
   readonly team: Team;
   readonly ready: boolean;
-  /** When they were last seen, so a room can tell who has actually turned up. */
+  /** When they first arrived, which is what decides who leads. */
   readonly joinedAt: number;
+  /** When they were last connected, so a room can tell a blip from a departure. */
+  readonly lastSeenAt: number;
 }
 
 export interface Roster {
@@ -68,7 +70,14 @@ export function join(roster: Roster, member: { id: string; name: string; team: T
     return { ...roster, members };
   }
 
-  const joined: Member = { id: member.id, name: member.name, team: member.team, ready: false, joinedAt: now };
+  const joined: Member = {
+    id: member.id,
+    name: member.name,
+    team: member.team,
+    ready: false,
+    joinedAt: now,
+    lastSeenAt: now,
+  };
   const leaders =
     roster.leaders[member.team] === null ? { ...roster.leaders, [member.team]: member.id } : roster.leaders;
   return { ...roster, members: [...roster.members, joined], leaders };
@@ -85,6 +94,44 @@ export function leave(roster: Roster, id: string): Roster {
   // The longest-serving teammate takes over rather than the seat sitting empty.
   const heir = members.filter((m) => m.team === member.team).sort((a, b) => a.joinedAt - b.joinedAt)[0];
   return { ...roster, members, leaders: { ...roster.leaders, [member.team]: heir?.id ?? null } };
+}
+
+/** Notes that these people are connected right now. */
+export function touch(roster: Roster, connected: ReadonlySet<string>, now: number): Roster {
+  if (connected.size === 0) return roster;
+  return {
+    ...roster,
+    members: roster.members.map((m) => (connected.has(m.id) ? { ...m, lastSeenAt: now } : m)),
+  };
+}
+
+/**
+ * Moves the lead off somebody who has been gone a while.
+ *
+ * A leader whose phone died should not have to be noticed and clicked around.
+ * The wait is long enough that a lift or a dropped signal does not cost them the
+ * job, and a teammate can always take over sooner by asking for it.
+ */
+export function passOnAbandonedLead(
+  roster: Roster,
+  connected: ReadonlySet<string>,
+  now: number,
+  graceMs: number,
+): Roster | null {
+  let next = roster;
+  for (const team of ["A", "B"] as const) {
+    const id = next.leaders[team];
+    if (id === null || connected.has(id)) continue;
+    const leader = findMember(next, id);
+    if (leader === undefined || now - leader.lastSeenAt < graceMs) continue;
+
+    const heir = next.members
+      .filter((m) => m.team === team && connected.has(m.id))
+      .sort((a, b) => a.joinedAt - b.joinedAt)[0];
+    if (heir === undefined) continue;
+    next = { ...next, leaders: { ...next.leaders, [team]: heir.id } };
+  }
+  return next === roster ? null : next;
 }
 
 export function setReady(roster: Roster, id: string, ready: boolean): Roster {

@@ -232,6 +232,42 @@ check("a teammate watches their own side deliberate", (await ali.locator("button
 check("the other side cannot", (await ben.locator("button.hero.staged").count()) === 0);
 check("and a teammate cannot click", await ali.locator("button.hero", { hasText: /^Ringo$/ }).first().isDisabled());
 
+// ── names, and beginning short-handed ──────────────────────────────────────
+const shortRoom = await (
+  await fetch(`${BASE}/api/rooms`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ presetId: "vg-3v3-standard", perTurnMs: 60_000, teamSize: 3 }),
+  })
+).json();
+
+const lead = async (code, who) => {
+  const page = await (await browser.newContext({ viewport: { width: 1000, height: 900 } })).newPage();
+  watch(page, who);
+  await page.goto(`${BASE}/r/${shortRoom.roomId}?code=${code}`);
+  await page.waitForSelector("input[aria-label='Your name']", { timeout: 5_000 });
+  const suggested = await page.inputValue("input[aria-label='Your name']");
+  await page.click("button.confirm");
+  await page.waitForSelector(".lobby, .turn", { timeout: 8_000 });
+  return { page, suggested };
+};
+
+const first = await lead(shortRoom.codes.A, "Ana");
+check("a name is filled in already, so joining is one tap", /^[A-Z][a-z]+ [A-Z][a-z]+$/.test(first.suggested), first.suggested);
+const second = await lead(shortRoom.codes.B, "Ben");
+check("a different browser gets a different name", first.suggested !== second.suggested);
+await wait(400);
+
+// Three a side were expected and one each turned up: the leaders can begin anyway.
+check("a short room offers its leaders a way to begin", (await first.page.locator(".start-anyway button").count()) === 1);
+await first.page.click(".start-anyway button");
+await wait(400);
+check("one side agreeing is not enough", (await first.page.locator(".turn").count()) === 0);
+check("and the other side is told it can finish it", (await second.page.locator(".start-anyway .note").textContent()).includes("has agreed"));
+await second.page.click(".start-anyway button");
+await first.page.waitForSelector(".turn", { timeout: 8_000 });
+check("both leaders agreeing begins it short-handed", (await first.page.locator(".turn").count()) === 1);
+
 check("no uncaught client errors", clientErrors.length === 0, clientErrors.join(" | "));
 
 await browser.close();

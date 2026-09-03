@@ -29,7 +29,13 @@ function lobbyFor(viewer: Viewer) {
     id, name: id.toUpperCase(), team, ready: true, connected: true, leader: true,
     you: viewer.role === "player" && viewer.memberId === id,
   });
-  return { teamSize: 1, members: [member("a1", "A"), member("b1", "B")], everyoneHere: true, everyoneReady: true };
+  return {
+    teamSize: 1,
+    members: [member("a1", "A"), member("b1", "B")],
+    everyoneHere: true,
+    everyoneReady: true,
+    startAnyway: { A: false, B: false },
+  };
 }
 
 function view(state: DraftState, viewer: Viewer) {

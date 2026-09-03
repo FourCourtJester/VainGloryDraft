@@ -37,10 +37,13 @@ import {
   findMember,
   handOver,
   join as joinRoster,
+  passOnAbandonedLead,
   setReady,
   teamMembers,
+  touch,
 } from "./roster.js";
 import type { RoomCredentials } from "./tokens.js";
+import { cleanName } from "./names.js";
 import { credentialsMatch, generateCredentials, generateToken, normaliseCode } from "./tokens.js";
 
 /**
@@ -52,6 +55,15 @@ function playersPerTeam(script: DraftState["config"]["script"]): number {
   const totals = deriveTotals(script);
   return Math.max(1, totals.byTeam.A.picks, totals.byTeam.B.picks);
 }
+
+/**
+ * How long a side's leader can be gone before the job passes to a teammate.
+ *
+ * Long enough that a tunnel or a dropped signal does not cost somebody the job,
+ * short enough that a team is not stuck waiting on a phone that is not coming
+ * back. A teammate can always take over sooner by asking.
+ */
+const LEAD_GRACE_MS = 45_000;
 
 /** Wrong codes tolerated before the room stops answering, and for how long. */
 const MAX_FAILURES = 8;
@@ -95,6 +107,12 @@ export interface RoomSnapshot {
   readonly failures: { readonly count: number; readonly since: number };
   /** Who is in the room, who leads each side, and how many each side waits for. */
   readonly roster: Roster;
+  /**
+   * Which sides' leaders have agreed to begin without a full room. A no-show
+   * should not be able to cancel a tournament match, but one side should not be
+   * able to start on the other either, so it takes both.
+   */
+  readonly startAnyway: Readonly<Record<Team, boolean>>;
   /** Where to report the finished draft, if whoever made the room asked for that. */
   readonly callbackUrl: string | null;
   /** Set once the finished draft has been reported, so it is not sent twice. */
@@ -162,6 +180,7 @@ export class Room {
       credentials: options.credentials ?? generateCredentials(),
       failures: { count: 0, since: now },
       roster: emptyRoster(options.teamSize ?? playersPerTeam(draft.value.config.script)),
+      startAnyway: { A: false, B: false },
       callbackUrl: options.callbackUrl ?? null,
       reported: false,
     };
@@ -199,6 +218,19 @@ export class Room {
     return null;
   }
 
+  /**
+   * Whether the draft may begin: either everybody is here and ready, or both
+   * sides' leaders have agreed to start without them. Either way both sides
+   * need somebody to do the picking.
+   */
+  canBegin(): boolean {
+    const { roster, startAnyway } = this.#snapshot;
+    const bothLed = roster.leaders.A !== null && roster.leaders.B !== null;
+    if (!bothLed) return false;
+    if (everyoneReady(roster)) return true;
+    return startAnyway.A && startAnyway.B;
+  }
+
   /** True while the room is refusing code attempts after too many wrong ones. */
   lockedOut(now: number = Date.now()): boolean {
     const { count, since } = this.#snapshot.failures;
@@ -226,7 +258,8 @@ export class Room {
    * had — their place, and the lead if it was theirs — so a dropped phone never
    * costs somebody the job mid-draft.
    */
-  seat(team: Team, playerId: string, name: string, now: number): Viewer {
+  seat(team: Team, playerId: string, rawName: string, now: number): Viewer {
+    const name = cleanName(rawName, playerId);
     // Scope the id to the side. A browser remembers one id, so without this an
     // organiser with both team links open would join as one person twice, and
     // the second side would never fill up.
@@ -266,6 +299,7 @@ export class Room {
    */
   attach(connectionId: string, viewer: Viewer, now: number): RoomOutcome {
     this.#connections.set(connectionId, viewer);
+    this.#noteWhoIsHere(now);
     return this.#maybeStart(now);
   }
 
@@ -275,7 +309,20 @@ export class Room {
     // they have gone and carries on; deciding what to do about it belongs to the
     // people running the tournament, not to the app.
     const overdue = this.tick(now);
+    this.#noteWhoIsHere(now);
     return { events: overdue.events, error: null, changed: true };
+  }
+
+  /**
+   * Records who is connected, and moves a lead off anybody who has been gone
+   * long enough that their side should not still be waiting on them.
+   */
+  #noteWhoIsHere(now: number): void {
+    const connected = this.#connectedIds();
+    let roster = touch(this.#snapshot.roster, connected, now);
+    const passed = passOnAbandonedLead(roster, connected, now, LEAD_GRACE_MS);
+    if (passed !== null) roster = passed;
+    if (roster !== this.#snapshot.roster) this.#snapshot = { ...this.#snapshot, roster };
   }
 
   /** Which member ids currently have a live connection. */
@@ -318,6 +365,7 @@ export class Room {
       members,
       everyoneHere: everyoneHere(roster),
       everyoneReady: everyoneReady(roster),
+      startAnyway: this.#snapshot.startAnyway,
     };
   }
 
@@ -332,7 +380,7 @@ export class Room {
    */
   #maybeStart(now: number): RoomOutcome {
     if (this.#snapshot.phase !== "lobby") return { events: [], error: null, changed: true };
-    if (!everyoneReady(this.#snapshot.roster)) return { events: [], error: null, changed: true };
+    if (!this.canBegin()) return { events: [], error: null, changed: true };
     this.#snapshot = { ...this.#snapshot, phase: "drafting", timer: startTimer(this.#snapshot.rules, now) };
     return { events: [], error: null, changed: true };
   }
@@ -364,6 +412,18 @@ export class Room {
       }
       this.#snapshot = { ...this.#snapshot, roster: moved };
       return { events: overdue.events, error: null, changed: true };
+    }
+
+    if (message.t === "startAnyway") {
+      if (this.#snapshot.roster.leaders[viewer.team] !== viewer.memberId) {
+        return refuse("not_your_call", "Only your side's leader can agree to begin early.", overdue);
+      }
+      this.#snapshot = {
+        ...this.#snapshot,
+        startAnyway: { ...this.#snapshot.startAnyway, [viewer.team]: message.agreed },
+      };
+      const started = this.#maybeStart(now);
+      return { events: [...overdue.events, ...started.events], error: null, changed: true };
     }
 
     if (message.t === "claimLead") {
@@ -416,6 +476,7 @@ export class Room {
    * would have if somebody had been watching the whole way through.
    */
   tick(now: number): RoomOutcome {
+    this.#noteWhoIsHere(now);
     if (this.#snapshot.phase !== "drafting") return NOTHING;
 
     const before = this.#snapshot.draft;
@@ -482,6 +543,23 @@ export class Room {
    */
   record(): DraftRecord {
     return draftRecord(this.#snapshot.draft, this.#snapshot.createdAt);
+  }
+
+  /**
+   * Who played, for whoever is keeping a record of the tournament.
+   *
+   * The ids are whatever each player arrived with, so a bot that hands out
+   * personalised links gets its own identifiers back and can tell that the same
+   * person played five drafts today.
+   */
+  players(): readonly { id: string; name: string; team: Team; led: boolean }[] {
+    const { roster } = this.#snapshot;
+    return roster.members.map((member) => ({
+      id: member.id,
+      name: member.name,
+      team: member.team,
+      led: roster.leaders[member.team] === member.id,
+    }));
   }
 
   projection(viewer: Viewer, now: number): DraftProjection {

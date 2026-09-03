@@ -523,3 +523,81 @@ describe("a command that changes nothing must not swallow the clock", () => {
     expect(outcome.changed).toBe(false); // the lobby clock never started
   });
 });
+
+describe("beginning without a full room", () => {
+  const shortRoom = (): Room => {
+    const room = new Room(snapshot({ teamSize: 3 }));
+    room.attach("c-a1", room.seat("A", "a1", "Ana", T0), T0);
+    room.attach("c-b1", room.seat("B", "b1", "Ben", T0), T0);
+    return room;
+  };
+
+  it("will not start on one side's word alone", () => {
+    const room = shortRoom();
+    expect(room.command(CAPTAIN_A, { t: "startAnyway", agreed: true }, T0).error).toBeNull();
+    expect(room.phase).toBe("lobby");
+  });
+
+  it("starts once both sides' leaders agree", () => {
+    const room = shortRoom();
+    room.command(CAPTAIN_A, { t: "startAnyway", agreed: true }, T0);
+    room.command(CAPTAIN_B, { t: "startAnyway", agreed: true }, T0);
+    expect(room.phase).toBe("drafting");
+  });
+
+  it("lets a side change its mind before the other agrees", () => {
+    const room = shortRoom();
+    room.command(CAPTAIN_A, { t: "startAnyway", agreed: true }, T0);
+    room.command(CAPTAIN_A, { t: "startAnyway", agreed: false }, T0);
+    room.command(CAPTAIN_B, { t: "startAnyway", agreed: true }, T0);
+    expect(room.phase).toBe("lobby");
+  });
+
+  it("is the leader's call, not any teammate's", () => {
+    const room = shortRoom();
+    room.attach("c-a2", room.seat("A", "a2", "Ali", T0), T0);
+    const teammate: Viewer = { role: "player", team: "A", memberId: "A:a2" };
+    expect(room.command(teammate, { t: "startAnyway", agreed: true }, T0).error?.code).toBe("not_your_call");
+  });
+
+  it("still needs somebody on each side to do the picking", () => {
+    const room = new Room(snapshot({ teamSize: 3 }));
+    room.attach("c-a1", room.seat("A", "a1", "Ana", T0), T0);
+    room.command(CAPTAIN_A, { t: "startAnyway", agreed: true }, T0);
+    expect(room.canBegin()).toBe(false);
+  });
+});
+
+describe("names", () => {
+  it("gives a player who typed nothing a name of their own", () => {
+    const room = new Room(snapshot());
+    const viewer = room.attach("c1", room.seat("A", "player-xyz", "", T0), T0) && room.seat("A", "player-xyz", "", T0);
+    const named = room.projection(viewer, T0).lobby.members[0]!;
+    expect(named.name).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
+  });
+
+  it("keeps the same name for the same player across rooms", () => {
+    const first = new Room(snapshot());
+    const second = new Room(snapshot({ roomId: "room-2" }));
+    const a = first.seat("A", "player-xyz", "", T0);
+    const b = second.seat("A", "player-xyz", "", T0);
+    expect(first.projection(a, T0).lobby.members[0]!.name).toBe(second.projection(b, T0).lobby.members[0]!.name);
+  });
+
+  it("prefers what they typed", () => {
+    const room = new Room(snapshot());
+    const viewer = room.seat("A", "player-xyz", "  Shaun  ", T0);
+    expect(room.projection(viewer, T0).lobby.members[0]!.name).toBe("Shaun");
+  });
+});
+
+describe("the finished draft's players", () => {
+  it("says who was there, on which side, and who did the picking", () => {
+    const room = liveRoom();
+    while (room.phase === "drafting") room.tick(room.alarmAt()! + 1);
+    expect(room.players()).toEqual([
+      { id: "A:a1", name: "Ana", team: "A", led: true },
+      { id: "B:b1", name: "Ben", team: "B", led: true },
+    ]);
+  });
+});

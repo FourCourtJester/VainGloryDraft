@@ -86,7 +86,11 @@ The protocol — routes, messages, phases — is in [docs/PROTOCOL.md](docs/PROT
   the opposing side cannot.
 - **The draft starts on a ready check**, not on a connection. Every player has to
   be present and confirm, so nobody's clock burns while their team is still
-  arriving.
+  arriving — or both sides' leaders can agree to begin short-handed, for a
+  no-show.
+- **Names arrive already filled in**, and the same person is suggested the same
+  name every time. Identity is an id, never a name, and never a device
+  fingerprint — see [docs/IDENTITY.md](docs/IDENTITY.md).
 - **A room stores the resolved script array, not a preset id.** Editing a preset
   cannot change a draft in progress.
 - **A finished draft is kept and can be read back.** Every turn is recorded in

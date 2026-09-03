@@ -1,6 +1,6 @@
 import type { JSX } from "react";
 import { useState } from "react";
-import { rememberName, rememberedName } from "./identity.js";
+import { rememberName, suggestedName } from "./identity.js";
 
 interface Props {
   readonly roomId: string;
@@ -19,7 +19,7 @@ interface Props {
  */
 export function JoinRoom({ roomId, onJoin, refused, code: known }: Props): JSX.Element {
   const [code, setCode] = useState(known ?? "");
-  const [name, setName] = useState(rememberedName);
+  const [name, setName] = useState(suggestedName);
 
   return (
     <main className="create join">
@@ -32,8 +32,8 @@ export function JoinRoom({ roomId, onJoin, refused, code: known }: Props): JSX.E
       <h1>Join room {roomId}</h1>
       <p className="note">
         {known === undefined
-          ? "Enter your team's code and the name your teammates will know you by. Spectators need no code — use the watch link."
-          : "Your team is expecting you. What should your teammates see?"}
+          ? "Enter your team's code. The name is already filled in — change it if your teammates would not know you by it. Spectators need no code, just the watch link."
+          : "Your team is expecting you. Change the name if your teammates would not know you by it."}
       </p>
 
       <form

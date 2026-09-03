@@ -64,6 +64,8 @@ export interface LobbyView {
   readonly members: readonly MemberView[];
   readonly everyoneHere: boolean;
   readonly everyoneReady: boolean;
+  /** Which sides' leaders have agreed to begin without a full room. */
+  readonly startAnyway: Readonly<Record<Team, boolean>>;
 }
 
 export interface ProjectionInput {

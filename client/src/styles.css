@@ -142,6 +142,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .hand-over:hover, .claim:hover { color: var(--text); border-color: var(--a); }
 .claim { margin-top: 8px; }
 
+.start-anyway { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.claim.agreed { border-color: var(--live); color: var(--live); }
+
 .ready-bar { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
 .ready-off { background: transparent; color: var(--text); border-color: var(--line); }
 

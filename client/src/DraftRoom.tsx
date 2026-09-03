@@ -100,6 +100,7 @@ export function DraftRoom({ roomId, credential, name: playerName, onRejoin }: Pr
           onReady={(ready) => room.send({ t: "ready", ready })}
           onHandOver={(memberId) => room.send({ t: "handOver", memberId })}
           onClaimLead={() => room.send({ t: "claimLead" })}
+          onStartAnyway={(agreed) => room.send({ t: "startAnyway", agreed })}
         />
       )}
       {room.phase === "complete" && <p className="banner done">Draft complete.</p>}

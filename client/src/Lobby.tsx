@@ -7,6 +7,7 @@ interface Props {
   readonly onReady: (ready: boolean) => void;
   readonly onHandOver: (memberId: string) => void;
   readonly onClaimLead: () => void;
+  readonly onStartAnyway: (agreed: boolean) => void;
 }
 
 /**
@@ -17,10 +18,12 @@ interface Props {
  * person has said they are ready, so a team still finding their headsets is not
  * being punished for it.
  */
-export function Lobby({ projection, onReady, onHandOver, onClaimLead }: Props): JSX.Element {
+export function Lobby({ projection, onReady, onHandOver, onClaimLead, onStartAnyway }: Props): JSX.Element {
   const { lobby } = projection;
   const you = lobby.members.find((member) => member.you);
   const waitingFor = lobby.members.filter((member) => !member.ready).length;
+  const agreed = lobby.startAnyway;
+  const otherSide = you === undefined ? null : you.team === "A" ? "B" : "A";
 
   return (
     <section className="lobby">
@@ -57,6 +60,26 @@ export function Lobby({ projection, onReady, onHandOver, onClaimLead }: Props): 
           </button>
           <span className="note">
             {lobby.everyoneReady ? "Starting…" : "The draft begins when everyone has confirmed."}
+          </span>
+        </div>
+      )}
+
+      {/* A no-show should not be able to cancel a match, so the two leaders can
+          agree to begin without a full room. It takes both, so neither side can
+          start on the other. */}
+      {you?.leader === true && !lobby.everyoneHere && otherSide !== null && (
+        <div className="start-anyway">
+          <button
+            type="button"
+            className={agreed[you.team] ? "claim agreed" : "claim"}
+            onClick={() => onStartAnyway(!agreed[you.team])}
+          >
+            {agreed[you.team] ? "Waiting for the other side" : "Begin without a full room"}
+          </button>
+          <span className="note">
+            {agreed[otherSide]
+              ? "The other side has agreed. Confirm and the draft begins."
+              : "Both sides' leaders have to agree. Use this for a no-show."}
           </span>
         </div>
       )}

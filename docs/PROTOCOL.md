@@ -159,7 +159,17 @@ it from them.
 A player is remembered by an id their browser keeps, so somebody whose phone
 dies comes back as themselves: same side, still leading if they were. The id is
 scoped to the side, so one browser can hold both team links without the second
-one arriving as the first.
+one arriving as the first. A bot that knows who is who can supply the id and
+name in the link instead — see [IDENTITY.md](IDENTITY.md), which is the better
+answer if you want to recognise a player across drafts.
+
+If the leader stays disconnected for 45 seconds the job passes to the
+longest-serving connected teammate on its own, so nobody has to notice and
+click. A teammate can take over sooner by asking.
+
+A no-show should not be able to cancel a match, so the two sides' leaders can
+agree to begin without a full room (`startAnyway`). It takes both, so neither
+side can start on the other.
 
 Teammates see their own side's staging. The opposing side never does.
 
