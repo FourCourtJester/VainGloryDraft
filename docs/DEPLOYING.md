@@ -42,6 +42,18 @@ since every page load, every draft action and every alarm counts towards it.
 Check the current figure on the Workers pricing page or in the dashboard, which
 also shows what has actually been used.
 
+## Before it is public
+
+Set the room-creation secret, or anyone who finds the address can make rooms on
+your allowance:
+
+```
+npx wrangler secret put ROOM_CREATE_SECRET
+```
+
+The bot then sends it as an `x-api-key` header. Nobody types it and no player
+ever sees it, so make it long and boring.
+
 ## Rooms are kept forever
 
 A draft stays readable from its links indefinitely, which is deliberate: a

@@ -76,6 +76,10 @@ The protocol — routes, messages, phases — is in [docs/PROTOCOL.md](docs/PROT
 - **The engine does not know consumers exist.** Events are derived by comparing
   two states (`diffEvents`), so a stats panel, an overlay or a webhook is a new
   subscriber and never surgery on the engine.
+- **Captains get a short code, spectators get a link.** A code is six characters
+  that can be read out over voice, carried in a link for one tap, or typed. Wrong
+  codes are counted and the room stops answering after a handful, so something
+  that short cannot simply be guessed at.
 - **A room stores the resolved script array, not a preset id.** Editing a preset
   cannot change a draft in progress.
 - **A finished draft is kept and can be read back.** Every turn is recorded in
@@ -151,9 +155,9 @@ Things a tournament organiser would hit, in rough order of how much they matter:
 - **No organiser controls.** No start button (the room starts itself when both
   captains connect), no remake, no undo. Deliberate for now: a remake is a new
   room, and undo would need a rule about who may call it.
-- **Open CORS and no rate limiting** on `/api`. Anyone can create rooms. Fine for
-  a private deploy, not for a public one — and worth remembering that the free
-  plan has a daily request allowance somebody else could spend for you.
+- **Open CORS**, and no rate limiting beyond the code lockout. Room creation can
+  be closed off with `ROOM_CREATE_SECRET`; do that before going public, since the
+  free plan's daily request allowance is otherwise somebody else's to spend.
 - **Never deployed.** `wrangler deploy` has not been run — everything here was
   verified against `wrangler dev` locally. See [docs/DEPLOYING.md](docs/DEPLOYING.md).
 

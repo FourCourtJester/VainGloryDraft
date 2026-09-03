@@ -32,7 +32,9 @@ console.log(`room ${room.roomId}`);
 
 const state = {};
 function connect(name, link) {
-  const token = new URL(link).searchParams.get("token");
+  // A captain's link carries their code; a spectator's carries a token.
+  const url = new URL(link);
+  const token = url.searchParams.get("token") ?? url.searchParams.get("code");
   return new Promise((resolve) => {
     const socket = new WebSocket(`${BASE.replace("http", "ws")}/api/rooms/${room.roomId}/ws?token=${token}`);
     socket.addEventListener("message", (event) => {
@@ -53,8 +55,8 @@ const b = await connect("B", room.links.captainB);
 await wait(200);
 check("starts once both captains are connected", state.A.phase, "drafting");
 
-const bad = await fetch(`${BASE}/api/rooms/${room.roomId}/state?token=nonsense`);
-check("rejects an invalid token", bad.status, 403);
+const bad = await fetch(`${BASE}/api/rooms/${room.roomId}/state?code=NONSEN`);
+check("rejects a code that is not this room's", bad.status, 403);
 
 a.send(JSON.stringify({ t: "stage", heroId: "ozo" }));
 await wait(200);

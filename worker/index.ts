@@ -15,7 +15,7 @@ import { HEROES, HERO_DATA_VERIFIED } from "../src/heroes.js";
 import { PENDING, PRESETS } from "../src/presets.js";
 import { parseAutoFill, parseTimerRules } from "../src/room/options.js";
 import type { CreateRoomOptions } from "../src/room/room.js";
-import { generateToken } from "../src/room/tokens.js";
+import { credentialsMatch, generateToken } from "../src/room/tokens.js";
 import { parseScript } from "../src/script.js";
 import { resolveScript } from "../src/presets.js";
 
@@ -24,6 +24,12 @@ export { DraftRoom } from "./draft-room.js";
 export interface Env {
   readonly DRAFT_ROOM: DurableObjectNamespace;
   readonly ASSETS: Fetcher;
+  /**
+   * Set this and only whoever knows it can make rooms — the tournament's own
+   * bot, rather than anyone who finds the address. Left unset, anybody can,
+   * which is fine while it is only yours.
+   */
+  readonly ROOM_CREATE_SECRET?: string;
 }
 
 interface CreateRoomRequest {
@@ -34,6 +40,8 @@ interface CreateRoomRequest {
   readonly autoFill?: "random" | "lowestIndex";
   readonly perTurnMs?: number;
   readonly bankMs?: number;
+  /** Where to POST the finished draft, for a bot that wants telling. */
+  readonly callbackUrl?: string;
 }
 
 const CORS = {
@@ -94,6 +102,13 @@ export default {
 
 /** Creates a draft and hands back the three links to share. */
 async function createRoom(request: Request, env: Env, url: URL): Promise<Response> {
+  if (typeof env.ROOM_CREATE_SECRET === "string" && env.ROOM_CREATE_SECRET !== "") {
+    const offered = request.headers.get("x-api-key") ?? "";
+    if (!credentialsMatch(offered, env.ROOM_CREATE_SECRET)) {
+      return json({ error: "Rooms can only be made by the tournament's own bot." }, 401);
+    }
+  }
+
   let body: CreateRoomRequest = {};
   try {
     if (request.headers.get("content-type")?.includes("application/json") === true) {
@@ -113,6 +128,11 @@ async function createRoom(request: Request, env: Env, url: URL): Promise<Respons
     return json({ error: problems.map((problem) => problem.message).join(" ") }, 400);
   }
 
+  const callbackUrl = body.callbackUrl ?? undefined;
+  if (callbackUrl !== undefined && !/^https:\/\//.test(callbackUrl)) {
+    return json({ error: "callbackUrl must be an https address." }, 400);
+  }
+
   let options: CreateRoomOptions;
   try {
     options = {
@@ -121,6 +141,7 @@ async function createRoom(request: Request, env: Env, url: URL): Promise<Respons
       mirrorPicks: body.mirrorPicks === true,
       autoFill: parseAutoFill(body.autoFill) ?? "random",
       rules,
+      callbackUrl: callbackUrl ?? null,
     };
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Invalid room options." }, 400);
@@ -130,12 +151,22 @@ async function createRoom(request: Request, env: Env, url: URL): Promise<Respons
   const created = await stub.fetch(new Request("https://draft/create", { method: "POST", body: JSON.stringify(options) }));
   if (!created.ok) return withCors(created);
 
-  const { roomId, tokens } = (await created.json()) as { roomId: string; tokens: Record<string, string> };
-  const link = (token: string): string => `${url.origin}/r/${roomId}?token=${token}`;
+  const { roomId, credentials } = (await created.json()) as {
+    roomId: string;
+    credentials: { A: string; B: string; spectator: string };
+  };
 
+  // A captain's link carries their code so that tapping it is enough, and the
+  // code is handed back on its own for a bot that would rather read it out.
   return json({
     roomId,
-    links: { captainA: link(tokens.A!), captainB: link(tokens.B!), spectator: link(tokens.spectator!) },
+    codes: { A: credentials.A, B: credentials.B },
+    links: {
+      captainA: `${url.origin}/r/${roomId}?code=${credentials.A}`,
+      captainB: `${url.origin}/r/${roomId}?code=${credentials.B}`,
+      spectator: `${url.origin}/r/${roomId}?token=${credentials.spectator}`,
+      join: `${url.origin}/r/${roomId}`,
+    },
   });
 }
 

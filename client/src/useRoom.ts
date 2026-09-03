@@ -16,6 +16,12 @@ export interface RoomView {
    */
   readonly skewMs: number;
   readonly error: RoomError | null;
+  /**
+   * Set when the room will not accept this credential — a mistyped code, or one
+   * that has been guessed at too often. Reconnecting stops, because trying the
+   * same wrong code again forever helps nobody.
+   */
+  readonly refused: string | null;
   readonly send: (message: ClientMessage) => void;
   readonly dismissError: () => void;
 }
@@ -38,6 +44,7 @@ export function useRoom(roomId: string, token: string): RoomView {
   const [projection, setProjection] = useState<DraftProjection | null>(null);
   const [skewMs, setSkewMs] = useState(0);
   const [error, setError] = useState<RoomError | null>(null);
+  const [refused, setRefused] = useState<string | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
   const attemptRef = useRef(0);
@@ -55,11 +62,13 @@ export function useRoom(roomId: string, token: string): RoomView {
       socketRef.current = socket;
       setLink("connecting");
 
+      let opened = false;
       socket.onopen = () => {
         if (cancelled) {
           socket.close();
           return;
         }
+        opened = true;
         attemptRef.current = 0;
         setLink("live");
       };
@@ -87,10 +96,27 @@ export function useRoom(roomId: string, token: string): RoomView {
         // older one finally closing is not news.
         if (socketRef.current === socket) socketRef.current = null;
         if (cancelled) return;
+
+        // A socket that never opened may have been turned away, but the failed
+        // handshake carries no reason. Ask over plain HTTP what the trouble was,
+        // and stop retrying if the answer is "not with that code" — trying the
+        // same wrong code forever helps nobody.
+        if (!opened) {
+          void fetch(`/api/rooms/${roomId}/state?token=${encodeURIComponent(token)}`)
+            .then(async (response) => {
+              if (response.status !== 403) return;
+              const body = (await response.json()) as { error?: string };
+              if (!cancelled) setRefused(body.error ?? "That code does not belong to this room.");
+            })
+            .catch(() => {});
+        }
+
         setLink("offline");
         const wait = BACKOFF_MS[Math.min(attemptRef.current, BACKOFF_MS.length - 1)]!;
         attemptRef.current += 1;
-        retry = setTimeout(open, wait);
+        retry = setTimeout(() => {
+          if (!cancelled) open();
+        }, wait);
       };
     };
 
@@ -110,7 +136,7 @@ export function useRoom(roomId: string, token: string): RoomView {
 
   const dismissError = useCallback(() => setError(null), []);
 
-  return { link, viewer, phase, projection, skewMs, error, send, dismissError };
+  return { link, viewer, phase, projection, skewMs, error, refused, send, dismissError };
 }
 
 /** Nudges the screen a few times a second so a countdown appears to tick. */

@@ -4,7 +4,7 @@ import { parseClientMessage } from "../src/room/protocol.js";
 import { parseAutoFill, parseTimerRules } from "../src/room/options.js";
 import { DEFAULT_TIMER_RULES, Room } from "../src/room/room.js";
 import type { RoomSnapshot } from "../src/room/room.js";
-import { generateRoomTokens, generateToken, tokensMatch } from "../src/room/tokens.js";
+import { credentialsMatch, generateCode, generateCredentials, generateToken, normaliseCode } from "../src/room/tokens.js";
 import { parseScript } from "../src/script.js";
 import type { Viewer } from "../src/projection.js";
 
@@ -12,7 +12,7 @@ const T0 = 1_700_000_000_000;
 const CAPTAIN_A: Viewer = { role: "captain", team: "A" };
 const CAPTAIN_B: Viewer = { role: "captain", team: "B" };
 const SPECTATOR: Viewer = { role: "spectator" };
-const TOKENS = { A: "token-a-aaaaaaaaaaaaaaaa", B: "token-b-bbbbbbbbbbbbbbbb", spectator: "token-s-ssssssssssssssss" };
+const CREDS = { A: "AAAAAA", B: "BBBBBB", spectator: "spectator-token-ssssssss" };
 
 function snapshot(overrides: Parameters<typeof Room.create>[0] = {}): RoomSnapshot {
   return Room.create(
@@ -21,7 +21,7 @@ function snapshot(overrides: Parameters<typeof Room.create>[0] = {}): RoomSnapsh
       heroPool: ["a", "b", "c", "d", "e", "f", "g"],
       autoFill: "lowestIndex",
       seed: "seed",
-      tokens: TOKENS,
+      credentials: CREDS,
       roomId: "room-1",
       ...overrides,
     },
@@ -49,38 +49,107 @@ function play(room: Room, now: number, ...heroes: string[]): void {
   if (confirmed.error !== null) throw new Error(confirmed.error.message);
 }
 
-describe("tokens", () => {
-  it("maps each token to its viewer and rejects anything else", () => {
+describe("getting into a room", () => {
+  it("gives each credential its seat and turns away anything else", () => {
     const room = new Room(snapshot());
-    expect(room.authenticate(TOKENS.A)).toEqual(CAPTAIN_A);
-    expect(room.authenticate(TOKENS.B)).toEqual(CAPTAIN_B);
-    expect(room.authenticate(TOKENS.spectator)).toEqual(SPECTATOR);
-    expect(room.authenticate("guess")).toBeNull();
+    expect(room.authenticate(CREDS.A)).toEqual(CAPTAIN_A);
+    expect(room.authenticate(CREDS.B)).toEqual(CAPTAIN_B);
+    expect(room.authenticate(CREDS.spectator)).toEqual(SPECTATOR);
+    expect(room.authenticate("QQQQQQ")).toBeNull();
     expect(room.authenticate("")).toBeNull();
   });
 
-  it("issues three distinct, URL-safe tokens per room", () => {
-    const tokens = generateRoomTokens();
-    expect(new Set([tokens.A, tokens.B, tokens.spectator]).size).toBe(3);
-    for (const token of Object.values(tokens)) expect(token).toMatch(/^[A-Za-z0-9_-]+$/);
+  it("takes a captain's code however they typed it", () => {
+    const room = new Room(snapshot());
+    expect(room.authenticate("aaaaaa")).toEqual(CAPTAIN_A);
+    expect(room.authenticate("  bbb bbb ".replace("bbb bbb", "bbbbbb"))).toEqual(CAPTAIN_B);
+    expect(room.authenticate("aa-aaaa")).toEqual(CAPTAIN_A);
+    expect(normaliseCode(" ab-cd ef ")).toBe("ABCDEF");
   });
 
-  it("does not repeat tokens across rooms", () => {
-    const seen = new Set(Array.from({ length: 50 }, () => generateToken()));
-    expect(seen.size).toBe(50);
+  it("draws codes people can read aloud, with no lookalike characters", () => {
+    for (let i = 0; i < 200; i++) expect(generateCode()).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$/);
+  });
+
+  it("gives every room its own credentials", () => {
+    const rooms = Array.from({ length: 40 }, () => generateCredentials());
+    expect(new Set(rooms.map((r) => r.A)).size).toBe(40);
+    expect(new Set(rooms.flatMap((r) => [r.A, r.B])).size).toBe(80);
+  });
+
+  it("does not repeat spectator tokens across rooms", () => {
+    expect(new Set(Array.from({ length: 50 }, () => generateToken())).size).toBe(50);
   });
 
   it("compares without leaking length or position", () => {
-    expect(tokensMatch("abc", "abc")).toBe(true);
-    expect(tokensMatch("abc", "abd")).toBe(false);
-    expect(tokensMatch("abc", "abcd")).toBe(false);
+    expect(credentialsMatch("abc", "abc")).toBe(true);
+    expect(credentialsMatch("abc", "abd")).toBe(false);
+    expect(credentialsMatch("abc", "abcd")).toBe(false);
   });
 
-  it("stays usable after a reconnect — links are reusable by decision", () => {
+  it("stays usable after a reconnect — credentials are reusable by decision", () => {
     const room = new Room(snapshot());
-    room.attach("a1", room.authenticate(TOKENS.A)!, T0);
+    room.attach("a1", room.authenticate(CREDS.A)!, T0);
     room.detach("a1", T0);
-    expect(room.authenticate(TOKENS.A)).toEqual(CAPTAIN_A);
+    expect(room.authenticate(CREDS.A)).toEqual(CAPTAIN_A);
+  });
+});
+
+describe("guessing at a captain's code", () => {
+  it("stops answering once somebody is clearly trying codes", () => {
+    const room = new Room(snapshot());
+    for (let i = 0; i < 8; i++) expect(room.authenticate(`WRONG${i}`, T0)).toBeNull();
+    expect(room.lockedOut(T0)).toBe(true);
+    // Even the right code is refused while the room is closed to guessing.
+    expect(room.authenticate(CREDS.A, T0)).toBeNull();
+  });
+
+  it("lets spectators in regardless, so one guesser cannot shut out the room", () => {
+    const room = new Room(snapshot());
+    for (let i = 0; i < 12; i++) room.authenticate(`WRONG${i}`, T0);
+    expect(room.lockedOut(T0)).toBe(true);
+    expect(room.authenticate(CREDS.spectator, T0)).toEqual(SPECTATOR);
+  });
+
+  it("opens up again after a few minutes", () => {
+    const room = new Room(snapshot());
+    for (let i = 0; i < 8; i++) room.authenticate(`WRONG${i}`, T0);
+    expect(room.lockedOut(T0 + 4 * 60_000)).toBe(true);
+    expect(room.lockedOut(T0 + 6 * 60_000)).toBe(false);
+    expect(room.authenticate(CREDS.A, T0 + 6 * 60_000)).toEqual(CAPTAIN_A);
+  });
+
+  it("forgives a captain who fat-fingers their own code", () => {
+    const room = new Room(snapshot());
+    for (let i = 0; i < 5; i++) room.authenticate("WRONGX", T0);
+    expect(room.authenticate(CREDS.A, T0)).toEqual(CAPTAIN_A);
+    // Getting in clears the count, so their earlier typos cost the next person nothing.
+    for (let i = 0; i < 7; i++) room.authenticate("WRONGX", T0);
+    expect(room.lockedOut(T0)).toBe(false);
+  });
+
+  it("says when it will listen again", () => {
+    const room = new Room(snapshot());
+    expect(room.lockedUntil(T0)).toBeNull();
+    for (let i = 0; i < 8; i++) room.authenticate(`WRONG${i}`, T0);
+    expect(room.lockedUntil(T0)).toBe(T0 + 5 * 60_000);
+  });
+});
+
+describe("reporting a finished draft", () => {
+  it("has nothing to report when nobody asked", () => {
+    const room = liveRoom();
+    while (room.phase === "drafting") room.tick(room.alarmAt()! + 1);
+    expect(room.pendingReport).toBeNull();
+  });
+
+  it("reports once the draft is over, and only once", () => {
+    const room = liveRoom({ callbackUrl: "https://bot.example/draft-done" });
+    expect(room.pendingReport).toBeNull(); // not while it is still being played
+    while (room.phase === "drafting") room.tick(room.alarmAt()! + 1);
+    expect(room.pendingReport).toBe("https://bot.example/draft-done");
+    room.markReported();
+    expect(room.pendingReport).toBeNull();
   });
 });
 

@@ -8,9 +8,9 @@ connect over a WebSocket and are told what they are allowed to see.
 | Route | Purpose |
 |---|---|
 | `POST /api/rooms` | Create a room. Returns `roomId` and the three links. |
-| `GET /api/rooms/:id/ws?token=` | WebSocket upgrade. |
-| `GET /api/rooms/:id/state?token=` | One-shot projection. A fallback for reconnects. |
-| `GET /api/rooms/:id/record?token=` | The whole draft in the order it happened. |
+| `GET /api/rooms/:id/ws?token=` or `?code=` | WebSocket upgrade. |
+| `GET /api/rooms/:id/state?token=` or `?code=` | One-shot projection. A fallback for reconnects. |
+| `GET /api/rooms/:id/record?token=` or `?code=` | The whole draft in the order it happened. |
 | `GET /api/heroes` | Static roster, with the `verified` flag. |
 | `GET /api/presets` | Preset list plus the still-`PENDING` ids. |
 
@@ -18,7 +18,8 @@ connect over a WebSocket and are told what they are allowed to see.
 
 ```json
 { "presetId": "vg-5v5-standard", "script": "Aban, Bban, Apick x2",
-  "mirrorPicks": false, "autoFill": "random", "perTurnMs": 30000, "bankMs": 60000 }
+  "mirrorPicks": false, "autoFill": "random", "perTurnMs": 30000, "bankMs": 60000,
+  "callbackUrl": "https://bot.example/draft-finished" }
 ```
 
 `script` is compact notation and wins over `presetId`. With neither, a room gets
@@ -32,12 +33,54 @@ to `random` rather than being stored.
 
 ## Identity
 
-The token in the query string is resolved to a viewer **once, at connect**. No
-message carries a claim about who sent it, so a client cannot assert a team; a
-`{"t":"confirm","team":"B"}` is just a confirm from whoever holds that socket.
+A room hands out two kinds of credential, because the two audiences want
+opposite things.
 
-Tokens are reusable, so a captain may hold several sockets at once — a laptop and
-a phone both count as that captain being present.
+**Captains get a six-character code** — `9YZ6P7` — drawn from an alphabet with no
+characters that get confused when read aloud (no O/0, no I/L/1). It arrives in
+their link, so tapping it is enough, and it can be typed at `/r/:roomId` by
+anyone who was given the code some other way. Case and stray spaces are
+forgiven.
+
+**Everyone else gets a long spectator link** and no code. Watching is not worth
+protecting, and a link that can be pasted into a channel is worth a lot.
+
+Either is resolved to a viewer **once, at connect**. No message carries a claim
+about who sent it, so a client cannot assert a team: `{"t":"confirm","team":"B"}`
+is just a confirm from whoever holds that socket. Both are reusable, so a captain
+may hold several sockets at once — a laptop and a phone both count as present.
+
+### Guessing
+
+Six characters is comfortable to type and short enough to guess if you are
+allowed to sit there trying. A room counts wrong codes and, after eight in five
+minutes, stops answering them until the window passes; the refusal says when to
+try again. Spectator links are checked first and are never affected, so one
+person grinding at codes cannot shut a tournament out of watching. A captain who
+gets in clears the count, so their own typos cost the next person nothing.
+
+## Creating rooms from a bot
+
+Set `ROOM_CREATE_SECRET` and only a caller who sends it as `x-api-key` can make
+rooms. Left unset, anybody who finds the address can — fine while it is private,
+not fine on a public deployment where somebody else can spend your request
+allowance.
+
+`POST /api/rooms` also takes `callbackUrl` (https only). When the draft finishes,
+the room POSTs the same body as `GET /record` to that address, once — a bot
+posting the result to a channel should not post it twice because a spectator
+reloaded. A bot that is down when it fires misses nothing: the record can still
+be fetched whenever it comes back.
+
+The response carries the codes on their own as well as inside the links, so a bot
+can either paste a link or read a code out:
+
+```jsonc
+{ "roomId": "d0jdFJPePKM",
+  "codes": { "A": "9YZ6P7", "B": "QADXBU" },
+  "links": { "captainA": "…?code=9YZ6P7", "captainB": "…?code=QADXBU",
+             "spectator": "…?token=99tXdNC0NnTHe0cRIRi3EQ", "join": "…/r/d0jdFJPePKM" } }
+```
 
 ## Client → server
 

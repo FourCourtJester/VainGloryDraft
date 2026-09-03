@@ -27,8 +27,12 @@ import { nextAlarmAt, read, settleTurn, startTimer } from "../timer.js";
 import type { TimerRules, TimerState } from "../timer.js";
 import type { AutoFillStrategy, DraftState, Team, TurnScript } from "../types.js";
 import type { ClientMessage, RoomError, RoomPhase } from "./protocol.js";
-import type { RoomTokens } from "./tokens.js";
-import { generateRoomTokens, generateToken, tokensMatch } from "./tokens.js";
+import type { RoomCredentials } from "./tokens.js";
+import { credentialsMatch, generateCredentials, generateToken, normaliseCode } from "./tokens.js";
+
+/** Wrong codes tolerated before the room stops answering, and for how long. */
+const MAX_FAILURES = 8;
+const FAILURE_WINDOW_MS = 5 * 60_000;
 
 /** Thirty seconds a turn, with a minute of reserve each for the whole draft. */
 export const DEFAULT_TIMER_RULES: TimerRules = { perTurnMs: 30_000, bankMs: 60_000 };
@@ -41,7 +45,8 @@ export interface CreateRoomOptions {
   readonly rules?: TimerRules;
   readonly roomId?: string;
   readonly seed?: string;
-  readonly tokens?: RoomTokens;
+  readonly callbackUrl?: string | null;
+  readonly credentials?: RoomCredentials;
 }
 
 /**
@@ -56,7 +61,17 @@ export interface RoomSnapshot {
   readonly draft: DraftState;
   readonly timer: TimerState;
   readonly rules: TimerRules;
-  readonly tokens: RoomTokens;
+  readonly credentials: RoomCredentials;
+  /**
+   * Wrong codes seen lately. A captain's code is short enough to guess if you
+   * are allowed to keep trying, so the room stops answering for a while once
+   * somebody clearly is.
+   */
+  readonly failures: { readonly count: number; readonly since: number };
+  /** Where to report the finished draft, if whoever made the room asked for that. */
+  readonly callbackUrl: string | null;
+  /** Set once the finished draft has been reported, so it is not sent twice. */
+  readonly reported: boolean;
 }
 
 export interface RoomOutcome {
@@ -117,7 +132,10 @@ export class Room {
       draft: draft.value,
       timer: startTimer(rules, now),
       rules,
-      tokens: options.tokens ?? generateRoomTokens(),
+      credentials: options.credentials ?? generateCredentials(),
+      failures: { count: 0, since: now },
+      callbackUrl: options.callbackUrl ?? null,
+      reported: false,
     };
   }
 
@@ -129,13 +147,67 @@ export class Room {
     return this.#snapshot.phase;
   }
 
-  /** Works out who somebody is from the link they arrived with. */
-  authenticate(token: string): Viewer | null {
-    const { tokens } = this.#snapshot;
-    if (tokensMatch(token, tokens.A)) return { role: "captain", team: "A" };
-    if (tokensMatch(token, tokens.B)) return { role: "captain", team: "B" };
-    if (tokensMatch(token, tokens.spectator)) return { role: "spectator" };
+  /**
+   * Works out who somebody is from whatever they arrived with — a spectator
+   * link, or a captain's code typed in or carried by their link.
+   *
+   * Wrong codes are counted. Six characters is comfortable to type and short
+   * enough to guess if you are allowed to sit there trying, so after a handful
+   * of failures the room stops answering for a few minutes. A spectator link is
+   * long enough that it needs no such protection, and is checked first so that
+   * watchers are never caught by a lockout somebody else caused.
+   */
+  authenticate(credential: string, now: number = Date.now()): Viewer | null {
+    const { credentials } = this.#snapshot;
+    if (credentialsMatch(credential, credentials.spectator)) return { role: "spectator" };
+
+    if (this.lockedOut(now)) return null;
+
+    const code = normaliseCode(credential);
+    if (credentialsMatch(code, credentials.A)) return this.#accept({ role: "captain", team: "A" }, now);
+    if (credentialsMatch(code, credentials.B)) return this.#accept({ role: "captain", team: "B" }, now);
+
+    this.#recordFailure(now);
     return null;
+  }
+
+  /** True while the room is refusing code attempts after too many wrong ones. */
+  lockedOut(now: number = Date.now()): boolean {
+    const { count, since } = this.#snapshot.failures;
+    if (now - since > FAILURE_WINDOW_MS) return false;
+    return count >= MAX_FAILURES;
+  }
+
+  /** When the room will start accepting codes again, or `null` if it already does. */
+  lockedUntil(now: number = Date.now()): number | null {
+    return this.lockedOut(now) ? this.#snapshot.failures.since + FAILURE_WINDOW_MS : null;
+  }
+
+  #accept(viewer: Viewer, now: number): Viewer {
+    // A captain who gets in clears the slate: the failures were their typing.
+    if (this.#snapshot.failures.count > 0) {
+      this.#snapshot = { ...this.#snapshot, failures: { count: 0, since: now } };
+    }
+    return viewer;
+  }
+
+  #recordFailure(now: number): void {
+    const { count, since } = this.#snapshot.failures;
+    const fresh = now - since > FAILURE_WINDOW_MS;
+    this.#snapshot = {
+      ...this.#snapshot,
+      failures: fresh ? { count: 1, since: now } : { count: count + 1, since },
+    };
+  }
+
+  /** The finished draft still needs reporting to whoever asked for it. */
+  get pendingReport(): string | null {
+    const { callbackUrl, reported, phase } = this.#snapshot;
+    return phase === "complete" && !reported && callbackUrl !== null ? callbackUrl : null;
+  }
+
+  markReported(): void {
+    this.#snapshot = { ...this.#snapshot, reported: true };
   }
 
   /**

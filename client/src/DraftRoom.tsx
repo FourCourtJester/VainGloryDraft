@@ -4,12 +4,15 @@ import type { Team } from "../../src/types.js";
 import type { Hero } from "../../src/types.js";
 import { DraftHistory } from "./DraftHistory.js";
 import { HeroGrid } from "./HeroGrid.js";
+import { JoinRoom } from "./JoinRoom.js";
 import { clock, describeTurn, verbFor } from "./format.js";
 import { useNow, useRoom } from "./useRoom.js";
 
 interface Props {
   readonly roomId: string;
   readonly token: string;
+  /** Hands a freshly typed code back up, after the last one was turned away. */
+  readonly onCredential?: ((code: string) => void) | undefined;
 }
 
 interface HeroFile {
@@ -25,7 +28,7 @@ interface HeroFile {
  * whose turn it is and how much time is left are all told to it by the room, so
  * there is no second copy of the rules here to fall out of step.
  */
-export function DraftRoom({ roomId, token }: Props): JSX.Element {
+export function DraftRoom({ roomId, token, onCredential }: Props): JSX.Element {
   const room = useRoom(roomId, token);
   const [heroData, setHeroData] = useState<HeroFile | null>(null);
 
@@ -39,6 +42,10 @@ export function DraftRoom({ roomId, token }: Props): JSX.Element {
   const projection = room.projection;
   const running = room.phase === "drafting";
   const now = useNow(running) + room.skewMs;
+
+  if (room.refused !== null) {
+    return <JoinRoom roomId={roomId} onJoin={(code) => onCredential?.(code)} refused={room.refused} />;
+  }
 
   if (projection === null || heroData === null) {
     return (

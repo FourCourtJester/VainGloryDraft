@@ -105,7 +105,7 @@ export class DraftRoom implements DurableObject {
     this.#room = new Room(snapshot);
     await this.#ctx.storage.put(SNAPSHOT_KEY, snapshot);
     this.#persisted = snapshot;
-    return json({ roomId: snapshot.roomId, tokens: snapshot.tokens });
+    return json({ roomId: snapshot.roomId, credentials: snapshot.credentials });
   }
 
   async #connect(request: Request, url: URL): Promise<Response> {
@@ -113,8 +113,8 @@ export class DraftRoom implements DurableObject {
       return json({ error: "Expected a WebSocket upgrade." }, 426);
     }
     const room = this.#room!;
-    const viewer = room.authenticate(url.searchParams.get("token") ?? "");
-    if (viewer === null) return json({ error: "Invalid link." }, 403);
+    const viewer = room.authenticate(credentialFrom(url));
+    if (viewer === null) return json(refusal(room), 403);
 
     const pair = new WebSocketPair();
     const client = pair[0];
@@ -138,8 +138,8 @@ export class DraftRoom implements DurableObject {
 
   async #state(url: URL): Promise<Response> {
     const room = this.#room!;
-    const viewer = room.authenticate(url.searchParams.get("token") ?? "");
-    if (viewer === null) return json({ error: "Invalid link." }, 403);
+    const viewer = room.authenticate(credentialFrom(url));
+    if (viewer === null) return json(refusal(room), 403);
 
     const now = Date.now();
     const outcome = room.tick(now);
@@ -156,9 +156,7 @@ export class DraftRoom implements DurableObject {
    */
   async #record(url: URL): Promise<Response> {
     const room = this.#room!;
-    if (room.authenticate(url.searchParams.get("token") ?? "") === null) {
-      return json({ error: "Invalid link." }, 403);
-    }
+    if (room.authenticate(credentialFrom(url)) === null) return json(refusal(room), 403);
     const now = Date.now();
     const outcome = room.tick(now);
     await this.#settleIfNeeded(outcome, now);
@@ -248,6 +246,37 @@ export class DraftRoom implements DurableObject {
     }
   }
 
+  /**
+   * Tells whoever made the room that the draft is over, if they asked to be
+   * told. Sent once: a bot posting the result to a channel should not post it
+   * twice because a spectator happened to reload.
+   */
+  async #report(): Promise<void> {
+    const room = this.#room!;
+    const callbackUrl = room.pendingReport;
+    if (callbackUrl === null) return;
+
+    const snapshot = room.snapshot;
+    const body = JSON.stringify({
+      roomId: snapshot.roomId,
+      createdAt: snapshot.createdAt,
+      phase: room.phase,
+      format: formatScript(snapshot.draft.config.script),
+      ...room.record(),
+    });
+
+    room.markReported();
+    await this.#ctx.storage.put(SNAPSHOT_KEY, room.snapshot);
+    this.#persisted = room.snapshot;
+
+    try {
+      await fetch(callbackUrl, { method: "POST", headers: { "content-type": "application/json" }, body });
+    } catch {
+      // Nothing useful to do about a bot that is down; the draft is safe here
+      // and can be fetched whenever it comes back.
+    }
+  }
+
   /** Writes the room down, sets its alarm, and sends everyone their own view. */
   async #settle(events: readonly DraftEvent[], now: number): Promise<void> {
     const room = this.#room!;
@@ -269,7 +298,22 @@ export class DraftRoom implements DurableObject {
       const socket = sockets.get(connectionId);
       if (socket !== undefined) send(socket, { t: "state", phase: room.phase, serverTime: now, projection, events });
     }
+
+    await this.#report();
   }
+}
+
+/** A code or a spectator token, from wherever the link happened to carry it. */
+function credentialFrom(url: URL): string {
+  return url.searchParams.get("token") ?? url.searchParams.get("code") ?? "";
+}
+
+/** Says no, and says whether it is worth trying again yet. */
+function refusal(room: Room): { error: string; retryAt?: number } {
+  const until = room.lockedUntil();
+  return until === null
+    ? { error: "That code does not belong to this room." }
+    : { error: "Too many wrong codes. Try again shortly.", retryAt: until };
 }
 
 function send(socket: WebSocket, message: ServerMessage): void {

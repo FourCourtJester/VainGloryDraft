@@ -4,6 +4,11 @@ compatibility_date = "2025-01-01"
 
 # The app's own files - pages, styles, hero portraits. Anything that is not one
 # of those, such as a room link or an API call, is passed on to the worker.
+# Set a secret here (or with `wrangler secret put ROOM_CREATE_SECRET`) and only
+# whoever knows it can make rooms. Left unset, anybody who finds the address can.
+[vars]
+# ROOM_CREATE_SECRET = ""
+
 [assets]
 directory = "./client/dist"
 binding = "ASSETS"

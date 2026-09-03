@@ -284,6 +284,16 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .create .confirm { margin: 6px 0 0; justify-self: start; }
 .warn { color: #ffcc66; font-size: 14px; margin: 0; }
 
+.join form { display: grid; gap: 14px; justify-items: start; }
+.join .code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 24px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  width: 100%;
+  max-width: 260px;
+}
+
 .links { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .links li {
   display: grid;
@@ -295,7 +305,20 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   border-radius: 8px;
   padding: 9px 11px;
 }
+.link-body { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .links code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.code-chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-style: normal;
+  font-size: 15px;
+  letter-spacing: 0.16em;
+  color: var(--text);
+  background: #232836;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 9px;
+  flex: none;
+}
 .links button { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 4px 10px; }
 
 /* ── phones ─────────────────────────────────────────────────────────────── */

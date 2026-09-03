@@ -44,7 +44,9 @@ await organiser.fill('input[type="number"] >> nth=1', "4");
 await organiser.click("button.confirm");
 await organiser.waitForSelector(".links code");
 const [captainA, captainB, spectatorLink] = await organiser.locator(".links code").allTextContents();
-check("hands back three links", [captainA, captainB, spectatorLink].every((link) => link?.includes("token=")));
+// The captains get a short code in their link; spectators get a long token.
+check("hands the captains a code and spectators a link",
+  captainA.includes("code=") && captainB.includes("code=") && spectatorLink.includes("token="));
 await shot(organiser, "ui-create");
 
 // ── the lobby holds the clock ───────────────────────────────────────────────
@@ -119,9 +121,39 @@ await rejoined.waitForSelector(".turn", { timeout: 5_000 });
 check("the same link rejoins mid-draft", (await rejoined.locator(".badge").textContent()) === "Captain A");
 check("with the draft intact", (await rejoined.locator(".team-A .bans li").first().textContent()) === "Ozo");
 
-const anonymous = await context.newPage();
-await anonymous.goto(captainA.split("?")[0]);
-check("a link stripped of its token says so", (await anonymous.locator("h1").textContent()).includes("Missing link token"));
+// ── joining with a code ────────────────────────────────────────────────────
+// A captain read their code over voice rather than tapping a link.
+const roomAddress = captainA.split("?")[0];
+const typed = await context.newPage();
+watch(typed, "captain typing a code");
+await typed.goto(roomAddress);
+await typed.waitForSelector("input.code", { timeout: 5_000 });
+check("the bare room address asks for a code", (await typed.locator("h1").textContent()).includes("Join room"));
+
+await typed.fill("input.code", "ZZZZZZ");
+await typed.click("button.confirm");
+await typed.waitForSelector(".warn", { timeout: 10_000 }).catch(() => {});
+check("a wrong code comes back to the join screen", (await typed.locator("input.code").count()) === 1);
+check("and says what went wrong", ((await typed.locator(".warn").textContent()) ?? "").length > 0);
+
+const codeA = new URL(captainA).searchParams.get("code");
+await typed.fill("input.code", codeA.toLowerCase());
+await typed.click("button.confirm");
+await typed.waitForSelector(".badge", { timeout: 8_000 });
+check("the right code gets in, whatever the case", (await typed.locator(".badge").textContent()) === "Captain A");
+
+// Somebody grinding at codes is shut out; watching is untouched by it.
+let lockout = null;
+for (let index = 0; index < 12; index++) {
+  const response = await fetch(`${BASE}/api/rooms/${roomAddress.split("/r/")[1]}/state?code=BADCD${index % 10}`);
+  if (response.status === 403) {
+    const body = await response.json();
+    if (body.retryAt !== undefined) lockout = body;
+  }
+}
+check("guessing at codes gets shut out", lockout !== null);
+const watching = await fetch(`${BASE}/api/rooms/${roomAddress.split("/r/")[1]}/state?token=${new URL(spectatorLink).searchParams.get("token")}`);
+check("without shutting out spectators", watching.status === 200);
 
 check("no uncaught client errors", clientErrors.length === 0, clientErrors.join(" | "));
 

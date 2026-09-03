@@ -18,7 +18,13 @@ interface Pending {
 
 interface Created {
   readonly roomId: string;
-  readonly links: { readonly captainA: string; readonly captainB: string; readonly spectator: string };
+  readonly codes: { readonly A: string; readonly B: string };
+  readonly links: {
+    readonly captainA: string;
+    readonly captainB: string;
+    readonly spectator: string;
+    readonly join: string;
+  };
 }
 
 /**
@@ -85,12 +91,17 @@ export function CreateRoom(): JSX.Element {
           the clock is not running.
         </p>
         <ul className="links">
-          <LinkRow label="Captain A" href={room.links.captainA} />
-          <LinkRow label="Captain B" href={room.links.captainB} />
+          <LinkRow label="Captain A" href={room.links.captainA} code={room.codes.A} />
+          <LinkRow label="Captain B" href={room.links.captainB} code={room.codes.B} />
           <LinkRow label="Spectators" href={room.links.spectator} />
         </ul>
         <p className="note">
-          Links are reusable: the same one works again after a refresh, a crash, or on a second device.
+          A captain's link carries their code, so tapping it is enough. If it is easier to read the code out,
+          send them <code>{room.links.join}</code> and the six characters instead.
+        </p>
+        <p className="note">
+          Everything here is reusable: the same link or code works again after a refresh, a crash, or on a
+          second device.
         </p>
       </main>
     );
@@ -169,12 +180,23 @@ export function CreateRoom(): JSX.Element {
 }
 
 /** One link, with a button to copy it, ready to paste to a captain. */
-function LinkRow({ label, href }: { readonly label: string; readonly href: string }): JSX.Element {
+function LinkRow({
+  label,
+  href,
+  code,
+}: {
+  readonly label: string;
+  readonly href: string;
+  readonly code?: string;
+}): JSX.Element {
   const [copied, setCopied] = useState(false);
   return (
     <li>
       <span className="link-label">{label}</span>
-      <code>{href}</code>
+      <span className="link-body">
+        <code>{href}</code>
+        {code !== undefined && <em className="code-chip">{code}</em>}
+      </span>
       <button
         type="button"
         onClick={() => {

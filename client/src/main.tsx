@@ -1,7 +1,9 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { useState } from "react";
 import { CreateRoom } from "./CreateRoom.js";
 import { DraftRoom } from "./DraftRoom.js";
+import { JoinRoom } from "./JoinRoom.js";
 import "./styles.css";
 
 /**
@@ -11,18 +13,20 @@ import "./styles.css";
  */
 function App(): ReturnType<typeof CreateRoom> {
   const match = /^\/r\/([A-Za-z0-9_-]+)\/?$/.exec(window.location.pathname);
-  const token = new URLSearchParams(window.location.search).get("token");
+  const params = new URLSearchParams(window.location.search);
+  // A spectator link carries a token; a captain's carries their code. Either
+  // way it is in the address, and either way it can be typed instead.
+  const fromUrl = params.get("token") ?? params.get("code");
+  const [entered, setEntered] = useState<string | null>(null);
 
   if (match === null) return <CreateRoom />;
-  if (token === null) {
-    return (
-      <main className="create">
-        <h1>Missing link token</h1>
-        <p className="note">This room needs the full link you were sent, including its <code>?token=</code> part.</p>
-      </main>
-    );
+
+  const roomId = match[1]!;
+  const credential = entered ?? fromUrl;
+  if (credential === null) {
+    return <JoinRoom roomId={roomId} onJoin={setEntered} refused={null} />;
   }
-  return <DraftRoom roomId={match[1]!} token={token} />;
+  return <DraftRoom key={credential} roomId={roomId} token={credential} onCredential={setEntered} />;
 }
 
 createRoot(document.getElementById("root")!).render(
