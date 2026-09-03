@@ -62,9 +62,10 @@ gets in clears the count, so their own typos cost the next person nothing.
 ## Creating rooms from a bot
 
 Set `ROOM_CREATE_SECRET` and only a caller who sends it as `x-api-key` can make
-rooms. Left unset, anybody who finds the address can — fine while it is private,
-not fine on a public deployment where somebody else can spend your request
-allowance.
+rooms. Left unset, anybody who finds the address can. Leaving it unset is the
+right choice for a deployment where the public is meant to be able to start a
+draft; setting it locks room creation to a bot, which is the wrong shape if
+players are also meant to spin drafts up from the site itself.
 
 `POST /api/rooms` also takes `callbackUrl` (https only). When the draft finishes,
 the room POSTs the same body as `GET /record` to that address, once — a bot
@@ -121,9 +122,21 @@ changes nothing.
 
 ## What a room keeps, and for how long
 
-A room is saved as it plays, and stays saved. There is no expiry: it lasts until
-somebody deletes it, so a draft can be opened again a week later from the same
-links and read back exactly as it happened.
+A room is saved as it plays, so a draft can be opened again days later from the
+same links and read back exactly as it happened. It does not last forever,
+though — a room clears itself out on its own, at one of two points:
+
+- **A month after the draft finishes.** Long past anybody's interest in a set
+  that is over, and it means storage does not simply grow without limit.
+- **Six hours after a room was made, if nobody ever played in it.** A link made
+  and never used is rubbish rather than history. The six hours run from the last
+  time anybody was seen in the room, not from when the link was made, so a room
+  set up well in advance of a match — with a squad sitting in it waiting — is
+  never swept out from under them.
+
+A room that has cleared itself out is gone for good: its links stop working and
+`GET /state` answers 404. Both windows can be set per room at creation with
+`retentionSeconds` and `abandonAfterSeconds`, which is mostly useful for testing.
 
 What is kept is the draft itself — every turn in order, which team, which heroes,
 whether the clock chose them because a captain ran out of time, and the moment

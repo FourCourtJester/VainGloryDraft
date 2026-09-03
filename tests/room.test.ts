@@ -168,7 +168,8 @@ describe("the lobby", () => {
   it("does not start, or burn clock, until everybody says they are ready", () => {
     const room = seatedRoom();
     expect(room.phase).toBe("lobby");
-    expect(room.alarmAt()).toBeNull();
+    // The room still wakes once, but only to check whether anybody ever came.
+    expect(room.alarmAt()).toBe(T0 + 6 * 60 * 60_000);
     expect(room.clock(T0 + 600_000)).toBeNull();
 
     // Ten minutes waiting around costs nobody anything.
@@ -287,7 +288,9 @@ describe("commands", () => {
     play(room, T0 + 4_000, "d", "e");
     play(room, T0 + 5_000, "f");
     expect(room.phase).toBe("complete");
-    expect(room.alarmAt()).toBeNull();
+    // No turn to wake for; the one alarm left is the clear-out, a month away.
+    expect(room.clock(T0 + 6_000)).toBeNull();
+    expect(room.alarmAt()).toBe(room.snapshot.completedAt! + 30 * 24 * 60 * 60_000);
   });
 
   it("rejects a spectator trying to act", () => {
@@ -375,7 +378,9 @@ describe("the clock", () => {
     const room = liveRoom();
     room.tick(T0 + 10 * 60_000);
     expect(room.clock(T0 + 10 * 60_000)).toBeNull();
-    expect(room.alarmAt()).toBeNull();
+    // The turn clock is done; what remains is the room's own clear-out.
+    expect(room.disposable(T0 + 10 * 60_000)).toBeNull();
+    expect(room.alarmAt()).toBeGreaterThan(T0 + 29 * 24 * 60 * 60_000);
   });
 });
 
@@ -599,5 +604,73 @@ describe("the finished draft's players", () => {
       { id: "A:a1", name: "Ana", team: "A", led: true },
       { id: "B:b1", name: "Ben", team: "B", led: true },
     ]);
+  });
+});
+
+describe("clearing rooms out", () => {
+  const HOUR = 60 * 60_000;
+  const DAY = 24 * HOUR;
+
+  it("wakes a waiting room only to check whether anybody ever came", () => {
+    const room = new Room(snapshot());
+    expect(room.alarmAt()).toBe(T0 + 6 * HOUR);
+    expect(room.disposable(T0 + 5 * HOUR)).toBeNull();
+    expect(room.disposable(T0 + 7 * HOUR)).toBe("abandoned");
+  });
+
+  it("leaves a room alone while people are actually in it", () => {
+    const room = seatedRoom();
+    expect(room.disposable(T0 + HOUR)).toBeNull();
+  });
+
+  it("does not throw away a room booked well ahead of the match", () => {
+    // A squad turns up early and waits. Hours later they are still there, and
+    // the room is theirs, not rubbish.
+    const room = seatedRoom();
+    room.tick(T0 + 5 * HOUR);
+    expect(room.disposable(T0 + 7 * HOUR)).toBeNull();
+    expect(room.alarmAt()).toBe(T0 + 5 * HOUR + 6 * HOUR);
+
+    // Once they give up and leave, the countdown runs from when they were last
+    // seen rather than from when the link was made.
+    expect(room.disposable(T0 + 12 * HOUR)).toBe("abandoned");
+  });
+
+  it("does not throw away a draft being played", () => {
+    const room = liveRoom();
+    expect(room.phase).toBe("drafting");
+    // A long draft is still a draft: only the turn clock matters here.
+    expect(room.disposable(T0 + 7 * HOUR)).toBeNull();
+    expect(room.alarmAt()).toBe(T0 + 90_000);
+  });
+
+  it("keeps a finished draft for a month, then clears it", () => {
+    const room = liveRoom();
+    let at = T0;
+    while (room.phase === "drafting") {
+      at = room.alarmAt()! + 1;
+      room.tick(at);
+    }
+    expect(room.phase).toBe("complete");
+    expect(room.disposable(at + 29 * DAY)).toBeNull();
+    expect(room.disposable(at + 31 * DAY)).toBe("expired");
+    expect(room.alarmAt()).toBeGreaterThan(at + 29 * DAY);
+  });
+
+  it("starts the month from when the draft finished, not when it began", () => {
+    const room = liveRoom();
+    let at = T0;
+    while (room.phase === "drafting") {
+      at = room.alarmAt()! + 1;
+      room.tick(at);
+    }
+    expect(room.snapshot.completedAt).toBe(at - 1);
+    expect(room.alarmAt()).toBe(room.snapshot.completedAt! + 30 * DAY);
+  });
+
+  it("takes a room's own retention when one was set", () => {
+    const room = new Room(snapshot({ abandonAfterMs: 60_000, retentionMs: 5 * 60_000 }));
+    expect(room.alarmAt()).toBe(T0 + 60_000);
+    expect(room.disposable(T0 + 61_000)).toBe("abandoned");
   });
 });

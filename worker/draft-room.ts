@@ -105,6 +105,9 @@ export class DraftRoom implements DurableObject {
     this.#room = new Room(snapshot);
     await this.#ctx.storage.put(SNAPSHOT_KEY, snapshot);
     this.#persisted = snapshot;
+    // Arm it now: a room nobody ever opens still has to wake up once, to notice
+    // that nobody ever opened it.
+    await this.#armAlarm();
     return json({ roomId: snapshot.roomId, credentials: snapshot.credentials });
   }
 
@@ -227,12 +230,46 @@ export class DraftRoom implements DurableObject {
     // An alarm is spent once it goes off, so there is nothing set at this point.
     this.#armed = null;
     const now = Date.now();
+
+    // Ticking first lets the room see who is still present, so a room people
+    // are sitting in is never mistaken for one nobody ever came to.
     const outcome = room.tick(now);
+
+    // The same alarm that runs the turn clock does the tidying up, since a room
+    // only ever needs waking for one of the two.
+    const disposable = room.disposable(now);
+    if (disposable !== null) {
+      await this.#discard(disposable);
+      return;
+    }
+
     await this.#settleIfNeeded(outcome, now);
     // Always set the next alarm, even if nothing turned out to be due. An alarm
     // that goes off a moment early would otherwise leave the room running with
     // no clock at all, which is the one thing it must never do.
     await this.#armAlarm();
+  }
+
+  /**
+   * Throws the room away for good.
+   *
+   * A room nobody used is rubbish within hours; a draft people played is
+   * history worth keeping, but not forever. Either way this is the end of it:
+   * the storage goes, the sockets are closed, and the links stop working.
+   */
+  async #discard(reason: "abandoned" | "expired"): Promise<void> {
+    for (const socket of this.#ctx.getWebSockets()) {
+      try {
+        socket.close(1000, reason === "expired" ? "This draft has been archived." : "This room was never used.");
+      } catch {
+        // Already gone; nothing to close.
+      }
+    }
+    await this.#ctx.storage.deleteAlarm();
+    await this.#ctx.storage.deleteAll();
+    this.#room = null;
+    this.#persisted = null;
+    this.#armed = null;
   }
 
   /** Sets the alarm for whenever the room next needs waking. Safe to call at any time. */

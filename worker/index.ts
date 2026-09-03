@@ -49,6 +49,10 @@ interface CreateRoomRequest {
    * two captains turn up.
    */
   readonly teamSize?: number;
+  /** Seconds a finished draft is kept before the room clears itself out. */
+  readonly retentionSeconds?: number;
+  /** Seconds a room that never started is kept. */
+  readonly abandonAfterSeconds?: number;
 }
 
 const CORS = {
@@ -147,6 +151,18 @@ async function createRoom(request: Request, env: Env, url: URL): Promise<Respons
     return json({ error: "callbackUrl must be an https address." }, 400);
   }
 
+  const seconds = (value: unknown, max: number): number | undefined => {
+    if (value === undefined) return undefined;
+    return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= max
+      ? Math.round(value) * 1000
+      : Number.NaN;
+  };
+  const retentionMs = seconds(body.retentionSeconds, 400 * 24 * 60 * 60);
+  const abandonAfterMs = seconds(body.abandonAfterSeconds, 30 * 24 * 60 * 60);
+  if (Number.isNaN(retentionMs) || Number.isNaN(abandonAfterMs)) {
+    return json({ error: "retentionSeconds and abandonAfterSeconds must be positive, and not absurd." }, 400);
+  }
+
   let options: CreateRoomOptions;
   try {
     options = {
@@ -157,6 +173,8 @@ async function createRoom(request: Request, env: Env, url: URL): Promise<Respons
       rules,
       callbackUrl: callbackUrl ?? null,
       ...(teamSize === undefined ? {} : { teamSize }),
+      ...(retentionMs === undefined ? {} : { retentionMs }),
+      ...(abandonAfterMs === undefined ? {} : { abandonAfterMs }),
     };
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Invalid room options." }, 400);

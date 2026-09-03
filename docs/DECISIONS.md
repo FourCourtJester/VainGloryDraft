@@ -51,6 +51,19 @@ nothing structural, since the phase already exists.
 prefix of the 5v5 script, and a test asserts that, since the rule it comes from
 is "the same as the fives, but three".
 
+**Rooms clear themselves out.** A finished draft is kept a month; a room nobody
+ever played in is thrown away six hours after the last sign of anybody in it.
+Keeping everything forever was the simpler thing to build, but nobody looks at a
+draft once the set it belonged to is over, and storage that only grows is a bill
+waiting to happen. The room's own alarm — already there to run the turn clock —
+does the sweeping, so this costs no extra machinery. Both windows are settable
+per room at creation.
+
+**Public room creation stays open.** `ROOM_CREATE_SECRET` gates creation to a
+bot when it is set, and the deployment where players start their own drafts
+leaves it unset. Guarding that against abuse is a rate limit's job, not a
+shared secret's.
+
 ## Still open
 - Whether a double pick in the 5v5 order is two clocks (as shipped) or one.
 - Per-hero roles and icons, pending the vgna.net export. See

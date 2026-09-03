@@ -67,6 +67,23 @@ function playersPerTeam(script: DraftState["config"]["script"]): number {
  */
 const LEAD_GRACE_MS = 45_000;
 
+/**
+ * How long a room that never got going is kept before it is thrown away.
+ *
+ * A link made and never used is rubbish, not history. Generous enough that a
+ * tournament can set rooms up hours in advance.
+ */
+const ABANDON_AFTER_MS = 6 * 60 * 60_000;
+
+/**
+ * How long a finished draft is kept.
+ *
+ * Nobody looks at a draft long after the set it belonged to, and storage that
+ * only ever grows is a bill waiting to happen. A month is far longer than
+ * anybody's interest and still means the room clears itself out.
+ */
+const RETAIN_AFTER_COMPLETE_MS = 30 * 24 * 60 * 60_000;
+
 /** Wrong codes tolerated before the room stops answering, and for how long. */
 const MAX_FAILURES = 8;
 const FAILURE_WINDOW_MS = 5 * 60_000;
@@ -85,6 +102,10 @@ export interface CreateRoomOptions {
   readonly callbackUrl?: string | null;
   /** How many players a side has. Taken from the format unless given. */
   readonly teamSize?: number;
+  /** How long a finished draft is kept. Defaults to a month. */
+  readonly retentionMs?: number;
+  /** How long a room that never started is kept. Defaults to six hours. */
+  readonly abandonAfterMs?: number;
   readonly credentials?: RoomCredentials;
 }
 
@@ -117,6 +138,10 @@ export interface RoomSnapshot {
   readonly startAnyway: Readonly<Record<Team, boolean>>;
   /** What each side has asked its own captain for. */
   readonly suggestions: readonly Suggestion[];
+  /** When the last turn was settled, which is when the clock on keeping it starts. */
+  readonly completedAt: number | null;
+  readonly retentionMs: number;
+  readonly abandonAfterMs: number;
   /** Where to report the finished draft, if whoever made the room asked for that. */
   readonly callbackUrl: string | null;
   /** Set once the finished draft has been reported, so it is not sent twice. */
@@ -186,6 +211,9 @@ export class Room {
       roster: emptyRoster(options.teamSize ?? playersPerTeam(draft.value.config.script)),
       startAnyway: { A: false, B: false },
       suggestions: [],
+      completedAt: null,
+      retentionMs: options.retentionMs ?? RETAIN_AFTER_COMPLETE_MS,
+      abandonAfterMs: options.abandonAfterMs ?? ABANDON_AFTER_MS,
       callbackUrl: options.callbackUrl ?? null,
       reported: false,
     };
@@ -526,11 +554,13 @@ export class Room {
       const ended = draft.committed.at(-1);
       if (ended !== undefined) timer = settleTurn(this.#snapshot.rules, timer, ended.team, turnEndedAt);
     }
+    const complete = isComplete(draft);
     this.#snapshot = {
       ...this.#snapshot,
       draft,
       timer,
-      phase: isComplete(draft) ? "complete" : this.#snapshot.phase,
+      phase: complete ? "complete" : this.#snapshot.phase,
+      completedAt: complete && this.#snapshot.completedAt === null ? (turnEndedAt ?? Date.now()) : this.#snapshot.completedAt,
     };
   }
 
@@ -539,10 +569,50 @@ export class Room {
    * nobody watching. Nothing to wake for when no clock is running.
    */
   alarmAt(): number | null {
-    if (this.#snapshot.phase !== "drafting") return null;
+    const { phase, completedAt, abandonAfterMs, retentionMs } = this.#snapshot;
+
+    // Waiting to start: the only thing worth waking for is throwing away a room
+    // nobody ever used.
+    if (phase === "lobby") return this.#lastSignOfLife() + abandonAfterMs;
+
+    // Finished: wake once, long after anybody cares, to clear itself out.
+    if (phase === "complete") return completedAt === null ? null : completedAt + retentionMs;
+
     const turn = currentTurn(this.#snapshot.draft);
     if (turn === null) return null;
     return nextAlarmAt(this.#snapshot.rules, this.#snapshot.timer, turn.team);
+  }
+
+  /**
+   * Whether this room has outlived its usefulness and should be deleted.
+   *
+   * Two quite different things: a room made and never played is rubbish within
+   * hours, while a draft that people played is history worth keeping for a
+   * while — but not forever, since storage that only grows is a bill waiting to
+   * happen and nobody reads a draft a month after the set it belonged to.
+   */
+  disposable(now: number): "abandoned" | "expired" | null {
+    const { phase, completedAt, abandonAfterMs, retentionMs } = this.#snapshot;
+    if (phase === "lobby" && now >= this.#lastSignOfLife() + abandonAfterMs) return "abandoned";
+    if (phase === "complete" && completedAt !== null && now >= completedAt + retentionMs) return "expired";
+    return null;
+  }
+
+  /**
+   * The last moment anybody showed an interest in this room.
+   *
+   * A room booked well in advance of a match is a room people are waiting on,
+   * not an abandoned one, so the countdown to throwing it away runs from the
+   * most recent sign of life rather than from when the link was made. Anybody
+   * connected counts as here now, since the room notes who is present every
+   * time it wakes.
+   */
+  #lastSignOfLife(): number {
+    let latest = this.#snapshot.createdAt;
+    for (const member of this.#snapshot.roster.members) {
+      if (member.lastSeenAt > latest) latest = member.lastSeenAt;
+    }
+    return latest;
   }
 
   clock(now: number): TurnClock | null {

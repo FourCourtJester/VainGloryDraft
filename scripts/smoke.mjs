@@ -101,5 +101,25 @@ check("shows a side as disconnected without pausing", state.S.projection.presenc
 
 s.close();
 b.close();
+
+// A room that never gets used should throw itself away. Real rooms wait hours;
+// this one is told to give up after a couple of seconds so the sweep can be
+// watched happening.
+console.log("\nchecking that an unused room clears itself out...");
+const doomed = await (
+  await fetch(`${BASE}/api/rooms`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ abandonAfterSeconds: 2, teamSize: 1 }),
+  })
+).json();
+
+const alive = await fetch(`${BASE}/api/rooms/${doomed.roomId}/state?token=${new URL(doomed.links.spectator).searchParams.get("token")}`);
+check("a new room answers", alive.status, 200);
+
+await wait(4000);
+const gone = await fetch(`${BASE}/api/rooms/${doomed.roomId}/state?token=${new URL(doomed.links.spectator).searchParams.get("token")}`);
+check("a room nobody ever used is thrown away", gone.status, 404);
+
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);
