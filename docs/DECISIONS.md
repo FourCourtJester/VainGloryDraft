@@ -59,10 +59,20 @@ waiting to happen. The room's own alarm — already there to run the turn clock 
 does the sweeping, so this costs no extra machinery. Both windows are settable
 per room at creation.
 
-**Public room creation stays open.** `ROOM_CREATE_SECRET` gates creation to a
-bot when it is set, and the deployment where players start their own drafts
-leaves it unset. Guarding that against abuse is a rate limit's job, not a
-shared secret's.
+**Public room creation stays open, and an allowance protects it.** Anybody who
+finds the site can start a draft; the org's bot is simply a caller that holds a
+key. A shared secret was the wrong tool, because it can only answer "yes" or
+"no" to a whole audience — so it now marks a caller as trusted rather than
+gating the door, and everybody else is held to five rooms in a burst, one back
+every twenty seconds, and a hundred a day, counted per address by a durable
+object of its own. `ROOM_CREATE_PRIVATE` still shuts the door completely for
+anyone who wants a deployment of their own.
+
+The count is written down rather than merely held in memory. An object that has
+gone quiet gets put away, and a script pacing itself around that would have been
+handed a fresh allowance every time — which is exactly the case the daily
+ceiling exists for. What is written down deletes itself a day later, on the same
+principle as the rooms.
 
 ## Still open
 - Whether a double pick in the 5v5 order is two clocks (as shipped) or one.

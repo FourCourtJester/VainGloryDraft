@@ -121,5 +121,21 @@ await wait(4000);
 const gone = await fetch(`${BASE}/api/rooms/${doomed.roomId}/state?token=${new URL(doomed.links.spectator).searchParams.get("token")}`);
 check("a room nobody ever used is thrown away", gone.status, 404);
 
+// Anybody may start a draft, but not at machine speed. A made-up address is
+// used so the check does not spend this machine's own allowance.
+console.log("\nchecking that one address cannot make rooms endlessly...");
+const address = `203.0.113.${1 + Math.floor(Math.random() * 250)}`;
+const attempt = () =>
+  fetch(`${BASE}/api/rooms`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "cf-connecting-ip": address },
+    body: JSON.stringify({ abandonAfterSeconds: 30 }),
+  }).then((response) => response.status);
+
+const codes = [];
+for (let i = 0; i < 7; i++) codes.push(await attempt());
+check("lets an ordinary person make a few drafts", codes.slice(0, 5), [200, 200, 200, 200, 200]);
+check("stops one address making them endlessly", codes.slice(5), [429, 429]);
+
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);

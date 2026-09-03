@@ -4,10 +4,14 @@ compatibility_date = "2025-01-01"
 
 # The app's own files - pages, styles, hero portraits. Anything that is not one
 # of those, such as a room link or an API call, is passed on to the worker.
-# Set a secret here (or with `wrangler secret put ROOM_CREATE_SECRET`) and only
-# whoever knows it can make rooms. Left unset, anybody who finds the address can.
+# Anybody who finds the site can start a draft; that is the intent. Set a key
+# here (or with `wrangler secret put ROOM_CREATE_SECRET`) and whoever sends it
+# — a tournament's own bot — is trusted to make as many rooms as it likes,
+# while everybody else keeps to a sensible allowance. Set ROOM_CREATE_PRIVATE
+# to "true" as well and only that key can make rooms at all.
 [vars]
 # ROOM_CREATE_SECRET = ""
+# ROOM_CREATE_PRIVATE = "false"
 
 [assets]
 directory = "./client/dist"
@@ -17,6 +21,13 @@ binding = "ASSETS"
 name = "DRAFT_ROOM"
 class_name = "DraftRoom"
 
+# One of these per address that makes rooms, holding nothing but a count. It is
+# how an open site stays open without one script being able to spend the whole
+# day's requests in a few seconds.
+[[durable_objects.bindings]]
+name = "GATEKEEPER"
+class_name = "Gatekeeper"
+
 # Each draft room is one of these, and this is what keeps the app on the free
 # plan: "new_sqlite_classes" declares the SQLite-backed kind of durable object,
 # which the Workers free plan includes. The older key-value kind
@@ -24,3 +35,7 @@ class_name = "DraftRoom"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["DraftRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Gatekeeper"]

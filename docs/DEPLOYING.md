@@ -44,8 +44,13 @@ also shows what has actually been used.
 
 ## Before it is public
 
-Set the room-creation secret, or anyone who finds the address can make rooms on
-your allowance:
+Anyone who finds the address can start a draft, and that is the intent — but a
+script could otherwise spend the whole day's allowance in a few seconds, so
+every address is held to five rooms in a burst, one back every twenty seconds,
+and a hundred a day. Over that, room-making answers `429` and the site carries
+on working normally for everybody else.
+
+A tournament bot needs more than that, so give it a key to skip the limit with:
 
 ```
 npx wrangler secret put ROOM_CREATE_SECRET
@@ -54,12 +59,22 @@ npx wrangler secret put ROOM_CREATE_SECRET
 The bot then sends it as an `x-api-key` header. Nobody types it and no player
 ever sees it, so make it long and boring.
 
-## Rooms are kept forever
+To close the site off entirely — no public drafts at all, only the bot's — set
+`ROOM_CREATE_PRIVATE = "true"` alongside it. Most deployments should not.
 
-A draft stays readable from its links indefinitely, which is deliberate: a
-finished draft can be reopened weeks later. Nothing deletes old rooms, so
-storage only grows — at 2.7 KB a draft, that will take a very long time to
-matter, but it is worth a retention decision eventually.
+## Rooms clear themselves out
+
+A finished draft stays readable from its links for a month, which is far longer
+than anybody's interest in a set that is over. A room nobody ever played in goes
+six hours after the last sign of anybody in it, so links made and never used do
+not pile up. Nothing has to be run to make this happen: each room wakes itself
+at the right moment and deletes itself.
+
+At 2.7 KB a draft, storage was never going to be the pressing bill — the point
+is that it does not grow without limit and nobody has to remember to tidy up.
+Both windows can be set per room at creation with `retentionSeconds` and
+`abandonAfterSeconds`, which is mostly how the smoke test watches a sweep happen
+in seconds rather than hours.
 
 ## If Cloudflare is ever the wrong answer
 

@@ -15,21 +15,30 @@ import { HEROES, HERO_DATA_VERIFIED } from "../src/heroes.js";
 import { PENDING, PRESETS } from "../src/presets.js";
 import { parseAutoFill, parseTimerRules } from "../src/room/options.js";
 import type { CreateRoomOptions } from "../src/room/room.js";
+import type { RateVerdict } from "./gatekeeper.js";
 import { credentialsMatch, generateToken } from "../src/room/tokens.js";
 import { deriveTotals, parseScript } from "../src/script.js";
 import { resolveScript } from "../src/presets.js";
 
 export { DraftRoom } from "./draft-room.js";
+export { Gatekeeper } from "./gatekeeper.js";
 
 export interface Env {
   readonly DRAFT_ROOM: DurableObjectNamespace;
+  readonly GATEKEEPER: DurableObjectNamespace;
   readonly ASSETS: Fetcher;
   /**
-   * Set this and only whoever knows it can make rooms — the tournament's own
-   * bot, rather than anyone who finds the address. Left unset, anybody can,
-   * which is fine while it is only yours.
+   * A key for whoever is trusted to make a lot of rooms — a tournament's own
+   * bot, say. Callers who send it as `x-api-key` are not held to the limit
+   * everybody else is. Left unset, everybody is treated the same.
    */
   readonly ROOM_CREATE_SECRET?: string;
+  /**
+   * Set to "true" to shut room-making to everybody but the key above, for a
+   * deployment that is nobody's business but its owner's. Left unset, anyone
+   * who finds the site can start a draft, which is how it is meant to be used.
+   */
+  readonly ROOM_CREATE_PRIVATE?: string;
 }
 
 interface CreateRoomRequest {
@@ -115,11 +124,19 @@ export default {
 
 /** Creates a draft and hands back the three links to share. */
 async function createRoom(request: Request, env: Env, url: URL): Promise<Response> {
-  if (typeof env.ROOM_CREATE_SECRET === "string" && env.ROOM_CREATE_SECRET !== "") {
-    const offered = request.headers.get("x-api-key") ?? "";
-    if (!credentialsMatch(offered, env.ROOM_CREATE_SECRET)) {
+  // Anyone may start a draft. Whoever holds the key — a tournament's bot — is
+  // trusted to make as many as it likes; everybody else gets an allowance, so
+  // that one script cannot spend the whole site's day in a few seconds.
+  const secret = env.ROOM_CREATE_SECRET;
+  const trusted =
+    typeof secret === "string" && secret !== "" && credentialsMatch(request.headers.get("x-api-key") ?? "", secret);
+
+  if (!trusted) {
+    if (env.ROOM_CREATE_PRIVATE === "true") {
       return json({ error: "Rooms can only be made by the tournament's own bot." }, 401);
     }
+    const refusal = await checkAllowance(request, env);
+    if (refusal !== null) return refusal;
   }
 
   let body: CreateRoomRequest = {};
@@ -201,6 +218,33 @@ async function createRoom(request: Request, env: Env, url: URL): Promise<Respons
       join: `${url.origin}/r/${roomId}`,
     },
   });
+}
+
+/**
+ * Asks whether the address this request came from has any room-making left in
+ * it, and hands back the refusal to send if it does not.
+ *
+ * Cloudflare tells us who is asking; behind nothing at all — a request made
+ * straight to the worker in testing, say — there is nobody to charge, so the
+ * request goes through.
+ */
+async function checkAllowance(request: Request, env: Env): Promise<Response | null> {
+  const address = request.headers.get("cf-connecting-ip");
+  if (address === null || address === "") return null;
+
+  const stub = env.GATEKEEPER.get(env.GATEKEEPER.idFromName(address));
+  const verdict = (await (await stub.fetch("https://gatekeeper/")).json()) as RateVerdict;
+  if (verdict.allowed) return null;
+
+  const response = json(
+    {
+      error: "That is a lot of drafts at once. Give it a moment and try again.",
+      retryAfter: verdict.retryAfter,
+    },
+    429,
+  );
+  response.headers.set("retry-after", String(verdict.retryAfter));
+  return response;
 }
 
 function json(body: unknown, status = 200): Response {

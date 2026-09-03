@@ -61,11 +61,19 @@ gets in clears the count, so their own typos cost the next person nothing.
 
 ## Creating rooms from a bot
 
-Set `ROOM_CREATE_SECRET` and only a caller who sends it as `x-api-key` can make
-rooms. Left unset, anybody who finds the address can. Leaving it unset is the
-right choice for a deployment where the public is meant to be able to start a
-draft; setting it locks room creation to a bot, which is the wrong shape if
-players are also meant to spin drafts up from the site itself.
+Anybody who finds the site can start a draft — that is the intent, and a bot is
+simply another caller. What the bot gets is a fast lane past the limit everyone
+else keeps to:
+
+- `ROOM_CREATE_SECRET`, sent as `x-api-key`, marks a caller as trusted. Trusted
+  callers make as many rooms as they like. Left unset, everybody is treated the
+  same.
+- Everybody else gets **five rooms in a burst, one back every twenty seconds,
+  and a hundred a day**, counted per address. Over that, `POST /api/rooms`
+  answers `429` with a `retry-after` header and a `retryAfter` in seconds.
+- `ROOM_CREATE_PRIVATE="true"` shuts room-making to everybody but the key, for a
+  deployment that is nobody's business but its owner's. Most deployments should
+  leave it alone.
 
 `POST /api/rooms` also takes `callbackUrl` (https only). When the draft finishes,
 the room POSTs the same body as `GET /record` to that address, once — a bot
