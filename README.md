@@ -88,6 +88,10 @@ The protocol — routes, messages, phases — is in [docs/PROTOCOL.md](docs/PROT
   be present and confirm, so nobody's clock burns while their team is still
   arriving — or both sides' leaders can agree to begin short-handed, for a
   no-show.
+- **Players tell their captain what they want.** Teams are often not in voice
+  chat, so anyone who is not picking can mark heroes to play or to ban; the
+  captain reads them most-agreed first and still makes every decision. Marks are
+  never shown to the other side.
 - **Names arrive already filled in**, and the same person is suggested the same
   name every time. Identity is an id, never a name, and never a device
   fingerprint — see [docs/IDENTITY.md](docs/IDENTITY.md).

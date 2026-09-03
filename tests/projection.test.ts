@@ -39,7 +39,10 @@ function lobbyFor(viewer: Viewer) {
 }
 
 function view(state: DraftState, viewer: Viewer) {
-  return project({ state, viewer, presence: PRESENCE, clock: null, lobby: lobbyFor(viewer) });
+  return project({
+    state, viewer, presence: PRESENCE, clock: null, lobby: lobbyFor(viewer),
+    suggestions: [], yourSuggestions: {},
+  });
 }
 
 function play(state: DraftState, ...heroes: string[]): DraftState {
@@ -125,6 +128,7 @@ describe("shared view", () => {
     const clock = { turnStartedAt: 1_000, perTurnMs: 30_000, bank: { A: 60_000, B: 60_000 }, expiresAt: 91_000 };
     const projection = project({
       state: must(createDraft(CONFIG)), viewer: SPECTATOR, presence: PRESENCE, clock, lobby: lobbyFor(SPECTATOR),
+      suggestions: [], yourSuggestions: {},
     });
     expect(projection.clock).toEqual(clock);
   });

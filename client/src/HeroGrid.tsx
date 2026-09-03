@@ -7,8 +7,12 @@ interface Props {
   readonly heroes: readonly Hero[];
   readonly rolesVerified: boolean;
   readonly projection: DraftProjection;
+  /** True when this viewer is the one choosing for their side right now. */
   readonly interactive: boolean;
   readonly onToggle: (heroId: string) => void;
+  /** Set for a player who is not choosing: tapping a hero tells their captain. */
+  readonly suggesting?: "want" | "ban" | undefined;
+  readonly onSuggest?: ((heroId: string) => void) | undefined;
 }
 
 /**
@@ -18,19 +22,33 @@ interface Props {
  * Heroes that are banned or already taken are shown struck through or greyed
  * rather than removed, so both captains can see at a glance what has gone.
  */
-export function HeroGrid({ heroes, rolesVerified, projection, interactive, onToggle }: Props): JSX.Element {
+export function HeroGrid({
+  heroes,
+  rolesVerified,
+  projection,
+  interactive,
+  onToggle,
+  suggesting,
+  onSuggest,
+}: Props): JSX.Element {
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("all");
 
   const byId = useMemo(() => new Map(heroes.map((hero) => [hero.id, hero])), [heroes]);
   const staged = new Set(projection.staged ?? []);
   const selectable = new Set(projection.selectable);
+  // What this side has asked for, so a captain can see it on the tiles.
+  const marks = new Map(projection.suggestions.map((entry) => [entry.heroId, entry]));
 
   const roles = useMemo(() => {
     const found = new Set<string>();
     for (const hero of heroes) for (const r of hero.roles) found.add(r);
     return [...found].sort();
   }, [heroes]);
+
+  // Named apart from the `availability` each tile destructures below.
+  const availabilityOf = (heroId: string): string =>
+    projection.heroes.find((hero) => hero.id === heroId)?.availability.state ?? "available";
 
   const query = search.trim().toLowerCase();
   const visible = projection.heroes.filter(({ id }) => {
@@ -75,6 +93,10 @@ export function HeroGrid({ heroes, rolesVerified, projection, interactive, onTog
           const hero = byId.get(id)!;
           const isStaged = staged.has(id);
           const canPick = interactive && selectable.has(id);
+          const asked = marks.get(id);
+          const yours = projection.yourSuggestions[id];
+          // A player who is not choosing can still tell their captain.
+          const canSuggest = !interactive && suggesting !== undefined && availabilityOf(id) === "available";
           const state =
             availability.state === "banned"
               ? "banned"
@@ -85,9 +107,12 @@ export function HeroGrid({ heroes, rolesVerified, projection, interactive, onTog
             <li key={id}>
               <button
                 type="button"
-                className={`hero ${state}${isStaged ? " staged" : ""}${hero.image === null ? "" : " has-icon"}`}
-                disabled={!canPick}
-                onClick={() => onToggle(id)}
+                className={
+                  `hero ${state}${isStaged ? " staged" : ""}${hero.image === null ? "" : " has-icon"}` +
+                  (yours === undefined ? "" : ` marked-${yours}`)
+                }
+                disabled={!canPick && !canSuggest}
+                onClick={() => (canPick ? onToggle(id) : onSuggest?.(id))}
                 data-hero={id}
                 aria-pressed={isStaged}
               >
@@ -98,6 +123,20 @@ export function HeroGrid({ heroes, rolesVerified, projection, interactive, onTog
                   <img className="hero-icon" src={hero.image} alt="" loading="lazy" width={28} height={28} />
                 )}
                 <span className="hero-name">{hero.name}</span>
+                {asked !== undefined && (asked.want.length > 0 || asked.ban.length > 0) && (
+                  <span
+                    className="asks"
+                    title={[
+                      asked.want.length > 0 ? `wants: ${asked.want.join(", ")}` : "",
+                      asked.ban.length > 0 ? `ban: ${asked.ban.join(", ")}` : "",
+                    ]
+                      .filter((line) => line !== "")
+                      .join(" · ")}
+                  >
+                    {asked.want.length > 0 && <em className="ask want">{asked.want.length}</em>}
+                    {asked.ban.length > 0 && <em className="ask ban">{asked.ban.length}</em>}
+                  </span>
+                )}
                 {availability.state === "banned" && <span className="tag">banned</span>}
                 {availability.state === "picked" && <span className="tag">{availability.by.join("+")}</span>}
               </button>

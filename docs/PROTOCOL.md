@@ -92,6 +92,8 @@ can either paste a link or read a code out:
 { "t": "ready",     "ready": true }    // "I am ready", or taking that back
 { "t": "handOver",  "memberId": "A:…" } // the leader giving the job to a teammate
 { "t": "claimLead" }                   // a teammate stepping in for an absent leader
+{ "t": "startAnyway", "agreed": true } // a leader agreeing to begin short-handed
+{ "t": "suggest", "heroId": "ozo", "intent": "want" }  // or "ban" — telling your own captain
 ```
 
 Anything else is answered with `{"t":"error","error":{"code":"bad_message"}}` and
@@ -172,6 +174,22 @@ agree to begin without a full room (`startAnyway`). It takes both, so neither
 side can start on the other.
 
 Teammates see their own side's staging. The opposing side never does.
+
+## Telling your captain what you want
+
+Most of these teams are not in voice chat, so a player who is not picking can
+mark heroes they want to play, or want banned. The person picking sees them
+gathered per hero, most-agreed first, with the names behind each — which is what
+they can actually read with a clock running.
+
+A mark is not an action: it takes no turn and spends no time, and only the
+person leading the side ever commits anything.
+
+Marks go to that side alone. Unlike a staged hero — seconds from being public
+anyway — a suggestion says what a team means to do several turns ahead, so the
+opposing side and the spectators never see them. A hero that has been banned or
+taken drops off the list, since it is noise at the moment there is least time
+for it.
 
 ## Phases
 

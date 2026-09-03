@@ -17,6 +17,7 @@
 
 import { availability, currentTurn, currentTurnIndex, isComplete, legalHeroes, summarise } from "./engine.js";
 import type { DraftRecord } from "./record.js";
+import type { HeroSuggestions } from "./room/suggestions.js";
 import { draftRecord } from "./record.js";
 import type { DraftState, HeroAvailability, Team, Turn } from "./types.js";
 
@@ -74,6 +75,10 @@ export interface ProjectionInput {
   readonly presence: Presence;
   readonly clock: TurnClock | null;
   readonly lobby: LobbyView;
+  /** What this viewer's own side has asked for. Never anybody else's. */
+  readonly suggestions: readonly HeroSuggestions[];
+  /** Which heroes this viewer marked, so their own marks read back to them. */
+  readonly yourSuggestions: Readonly<Record<string, "want" | "ban">>;
   /** When the room was made, used to time the first turn. */
   readonly startedAt?: number | undefined;
 }
@@ -101,6 +106,14 @@ export interface DraftProjection {
   /** True when this viewer is the one who picks and bans for their side. */
   readonly leading: boolean;
   /**
+   * What this viewer's own side wants, most-agreed first. Empty for spectators
+   * and for the other team: a suggestion says what a side intends several turns
+   * ahead, so unlike a staged hero it is never shown outside the team.
+   */
+  readonly suggestions: readonly HeroSuggestions[];
+  /** This viewer's own marks, by hero. */
+  readonly yourSuggestions: Readonly<Record<string, "want" | "ban">>;
+  /**
    * How the draft went, turn by turn, once it is over. Anyone opening the room
    * later is shown the same account, which is the point of keeping it.
    */
@@ -117,7 +130,16 @@ export function canSeeStaging(state: DraftState, viewer: Viewer): boolean {
 }
 
 /** Builds one person's view of the draft as it stands. */
-export function project({ state, viewer, presence, clock, lobby, startedAt }: ProjectionInput): DraftProjection {
+export function project({
+  state,
+  viewer,
+  presence,
+  clock,
+  lobby,
+  suggestions,
+  yourSuggestions,
+  startedAt,
+}: ProjectionInput): DraftProjection {
   const turn = currentTurn(state);
   const summary = summarise(state);
   const leading = viewer.role === "player" && lobby.members.some((m) => m.you && m.leader);
@@ -141,6 +163,8 @@ export function project({ state, viewer, presence, clock, lobby, startedAt }: Pr
     clock,
     lobby,
     leading,
+    suggestions,
+    yourSuggestions,
     record: isComplete(state) ? draftRecord(state, startedAt ?? null) : null,
   };
 }

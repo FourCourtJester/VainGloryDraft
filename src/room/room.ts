@@ -14,7 +14,7 @@
  */
 
 import { draftConfig } from "../config.js";
-import { commit, createDraft, currentTurn, isComplete, resolveTimeout, stage, unstage } from "../engine.js";
+import { availability, commit, createDraft, currentTurn, isComplete, resolveTimeout, stage, unstage } from "../engine.js";
 import type { DraftEvent } from "../events.js";
 import { diffEvents } from "../events.js";
 import { ALL_HERO_IDS } from "../heroes.js";
@@ -29,6 +29,8 @@ import type { TimerRules, TimerState } from "../timer.js";
 import type { AutoFillStrategy, DraftState, Team, TurnScript } from "../types.js";
 import type { ClientMessage, RoomError, RoomPhase } from "./protocol.js";
 import type { Roster } from "./roster.js";
+import type { Suggestion } from "./suggestions.js";
+import { forTeam, toggle as toggleSuggestion } from "./suggestions.js";
 import {
   claimLead,
   emptyRoster,
@@ -113,6 +115,8 @@ export interface RoomSnapshot {
    * able to start on the other either, so it takes both.
    */
   readonly startAnyway: Readonly<Record<Team, boolean>>;
+  /** What each side has asked its own captain for. */
+  readonly suggestions: readonly Suggestion[];
   /** Where to report the finished draft, if whoever made the room asked for that. */
   readonly callbackUrl: string | null;
   /** Set once the finished draft has been reported, so it is not sent twice. */
@@ -181,6 +185,7 @@ export class Room {
       failures: { count: 0, since: now },
       roster: emptyRoster(options.teamSize ?? playersPerTeam(draft.value.config.script)),
       startAnyway: { A: false, B: false },
+      suggestions: [],
       callbackUrl: options.callbackUrl ?? null,
       reported: false,
     };
@@ -414,6 +419,22 @@ export class Room {
       return { events: overdue.events, error: null, changed: true };
     }
 
+    if (message.t === "suggest") {
+      if (!this.#snapshot.draft.config.heroPool.includes(message.heroId)) {
+        return refuse("unknown_hero", `${message.heroId} is not in this draft.`, overdue);
+      }
+      this.#snapshot = {
+        ...this.#snapshot,
+        suggestions: toggleSuggestion(this.#snapshot.suggestions, {
+          memberId: viewer.memberId,
+          team: viewer.team,
+          heroId: message.heroId,
+          intent: message.intent,
+        }),
+      };
+      return { events: overdue.events, error: null, changed: true };
+    }
+
     if (message.t === "startAnyway") {
       if (this.#snapshot.roster.leaders[viewer.team] !== viewer.memberId) {
         return refuse("not_your_call", "Only your side's leader can agree to begin early.", overdue);
@@ -569,8 +590,34 @@ export class Room {
       presence: this.presence(),
       clock: this.clock(now),
       lobby: this.lobby(viewer.role === "player" ? viewer.memberId : null),
+      ...this.#suggestionsFor(viewer),
       startedAt: this.#snapshot.createdAt,
     });
+  }
+
+  /**
+   * What this viewer's own side has asked for, and what they marked themselves.
+   * Spectators and the other team get nothing: a suggestion gives away what a
+   * side means to do several turns from now.
+   */
+  #suggestionsFor(viewer: Viewer): {
+    suggestions: ReturnType<typeof forTeam>;
+    yourSuggestions: Record<string, "want" | "ban">;
+  } {
+    if (viewer.role !== "player") return { suggestions: [], yourSuggestions: {} };
+
+    const nameOf = (memberId: string): string => findMember(this.#snapshot.roster, memberId)?.name ?? "Someone";
+    const available = (heroId: string): boolean => availability(this.#snapshot.draft, heroId).state === "available";
+
+    const yours: Record<string, "want" | "ban"> = {};
+    for (const suggestion of this.#snapshot.suggestions) {
+      if (suggestion.memberId === viewer.memberId) yours[suggestion.heroId] = suggestion.intent;
+    }
+
+    return {
+      suggestions: forTeam(this.#snapshot.suggestions, viewer.team, nameOf, available),
+      yourSuggestions: yours,
+    };
   }
 
   /** Everyone currently connected, each with the view of the draft they are allowed. */

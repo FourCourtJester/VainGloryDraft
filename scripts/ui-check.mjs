@@ -112,10 +112,13 @@ check("the ban lands for every viewer", (await spectator.locator(".team-A .bans 
 check("and the turn passes on", (await b.locator(".turn-label").textContent()).startsWith("Team B bans"));
 check("a banned hero is struck out of the pool", (await spectator.locator("button.hero.banned").count()) === 1);
 
-// Between turns nothing is clickable, so a captain is never offered a choice
-// that would only be refused.
-check("out of turn, the pool is not clickable", await a.locator("button.hero", { hasText: "Ringo" }).first().isDisabled());
+// Out of turn a hero can still be tapped, but only to tell your captain: it
+// stages nothing, and no action is offered that the server would refuse.
+await a.locator('button.hero[data-hero="ringo"]').click();
+await wait(400);
+check("out of turn, tapping a hero stages nothing", (await a.locator("button.hero.staged").count()) === 0);
 check("and no confirm bar is shown", (await a.locator(".confirm-bar").count()) === 0);
+check("the turn is undisturbed", (await b.locator(".turn-label").textContent()).startsWith("Team B"));
 
 // ── the clock resolves a turn nobody answered ───────────────────────────────
 console.log("      waiting out B's clock (8s turn + 4s reserve)…");
@@ -230,7 +233,36 @@ await wait(400);
 check("the one picking can choose", (await ash.locator("button.hero.staged").count()) === 1);
 check("a teammate watches their own side deliberate", (await ali.locator("button.hero.staged").count()) === 1);
 check("the other side cannot", (await ben.locator("button.hero.staged").count()) === 0);
-check("and a teammate cannot click", await ali.locator("button.hero", { hasText: /^Ringo$/ }).first().isDisabled());
+// The leader already has one hero staged at this point, so the test is that a
+// teammate's tap adds nothing to it and offers them nothing to confirm.
+const stagedBefore = await ash.locator("button.hero.staged").count();
+await ali.locator('button.hero[data-hero="ringo"]').click();
+await wait(400);
+check("a teammate tapping a hero stages nothing", (await ash.locator("button.hero.staged").count()) === stagedBefore);
+check("and they are offered nothing to confirm", (await ali.locator("button.confirm").count()) === 0);
+
+// ── telling the captain what you want ──────────────────────────────────────
+// Most of these teams are not in voice chat, so this is how the captain hears
+// from anybody. Marks add a count to a tile, so go by hero id, not by name.
+check("the one picking gets no suggest controls", (await ash.locator(".suggest-bar").count()) === 0);
+check("their teammates do", (await ali.locator(".suggest-bar").count()) === 1);
+
+for (const page of [ali, ana]) {
+  await page.click(".suggest-bar .mode.want");
+  await page.locator('button.hero[data-hero="krul"]').click();
+}
+await ana.click(".suggest-bar .mode.ban");
+await ana.locator('button.hero[data-hero="saw"]').click();
+await wait(700);
+
+const askedFor = await ash.locator(".asked-for .asked").allTextContents();
+check("the captain is shown what their side asked for", askedFor.some((text) => text.startsWith("Krul")), askedFor.join(" | "));
+check("with the most-agreed first", askedFor[0]?.startsWith("Krul") === true, askedFor.join(" | "));
+check("and how many of them wanted it", (await ash.locator(".asked-for .ask.want").first().textContent()) === "2");
+check("a ban asked for reads apart from a want", (await ash.locator(".asked-for .ask.ban").count()) === 1);
+check("the other side is shown none of it", (await ben.locator(".asked-for").count()) === 0);
+check("a teammate sees their own marks", (await ana.locator("button.hero.marked-want").count()) === 1);
+check("marking never moves the draft on", (await ash.locator(".turn-label").textContent()).startsWith("Team A"));
 
 // ── names, and beginning short-handed ──────────────────────────────────────
 const shortRoom = await (

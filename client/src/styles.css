@@ -299,6 +299,51 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .hero.picked-A .hero-icon, .hero.picked-B .hero-icon, .hero.picked-AB .hero-icon { filter: grayscale(0.6); }
 .tag { font-size: 10px; text-transform: uppercase; color: var(--muted); }
 
+/* ── what a side has asked for ──────────────────────────────────────────── */
+
+.suggest-bar, .asked-for {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.suggest-bar .mode {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+.suggest-bar .mode.want.on { border-color: var(--live); color: var(--live); }
+.suggest-bar .mode.ban.on { border-color: var(--danger); color: var(--danger); }
+
+.asked {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+.ask {
+  font-style: normal;
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-weight: 600;
+}
+.ask.want { background: rgba(69, 209, 154, 0.18); color: var(--live); }
+.ask.ban { background: rgba(255, 92, 108, 0.16); color: var(--danger); }
+
+.asks { display: inline-flex; gap: 3px; flex: none; }
+/* A hero this player marked themselves. */
+.hero.marked-want { box-shadow: inset 2px 0 0 var(--live); }
+.hero.marked-ban { box-shadow: inset 2px 0 0 var(--danger); }
+
 /* ── confirm ────────────────────────────────────────────────────────────── */
 
 .confirm-bar {

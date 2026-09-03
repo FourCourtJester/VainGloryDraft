@@ -31,7 +31,9 @@ export type ClientMessage =
    * A side's leader agreeing to begin without a full room. Both sides' leaders
    * have to say so, which is how a tournament gets past a no-show.
    */
-  | { readonly t: "startAnyway"; readonly agreed: boolean };
+  | { readonly t: "startAnyway"; readonly agreed: boolean }
+  /** Telling your own captain you want a hero, or want it banned. */
+  | { readonly t: "suggest"; readonly heroId: string; readonly intent: "want" | "ban" };
 
 export type RoomErrorCode =
   | DraftErrorCode
@@ -83,6 +85,7 @@ export function parseClientMessage(raw: string): ClientMessage | null {
     ready?: unknown;
     memberId?: unknown;
     agreed?: unknown;
+    intent?: unknown;
   };
   switch (message.t) {
     case "confirm":
@@ -92,6 +95,10 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return { t: "claimLead" };
     case "startAnyway":
       return typeof message.agreed === "boolean" ? { t: "startAnyway", agreed: message.agreed } : null;
+    case "suggest":
+      return typeof message.heroId === "string" && (message.intent === "want" || message.intent === "ban")
+        ? { t: "suggest", heroId: message.heroId, intent: message.intent }
+        : null;
     case "stage":
     case "unstage":
       return typeof message.heroId === "string" ? { t: message.t, heroId: message.heroId } : null;

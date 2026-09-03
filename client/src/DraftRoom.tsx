@@ -34,6 +34,8 @@ interface HeroFile {
 export function DraftRoom({ roomId, credential, name: playerName, onRejoin }: Props): JSX.Element {
   const room = useRoom(roomId, credential, playerName);
   const [heroData, setHeroData] = useState<HeroFile | null>(null);
+  // Which way a teammate is marking heroes for their captain.
+  const [suggesting, setSuggesting] = useState<"want" | "ban">("want");
 
   useEffect(() => {
     void fetch("/api/heroes")
@@ -134,13 +136,54 @@ export function DraftRoom({ roomId, credential, name: playerName, onRejoin }: Pr
       <div className="board">
         <TeamColumn team="A" projection={projection} name={name} />
         <div className="middle">
+          {/* A player who is not choosing can still say what they want. Most of
+              these teams are not in voice chat, so this is the only way the
+              captain hears from them at all. */}
+          {running && viewer?.role === "player" && !myTurn && (
+            <div className="suggest-bar">
+              <span className="note">Tell your captain</span>
+              <button
+                type="button"
+                className={suggesting === "want" ? "mode want on" : "mode want"}
+                onClick={() => setSuggesting("want")}
+              >
+                I want to play
+              </button>
+              <button
+                type="button"
+                className={suggesting === "ban" ? "mode ban on" : "mode ban"}
+                onClick={() => setSuggesting("ban")}
+              >
+                Ban this
+              </button>
+              <span className="note">then tap heroes below</span>
+            </div>
+          )}
+
           <HeroGrid
             heroes={heroData.heroes}
             rolesVerified={heroData.verified}
             projection={projection}
             interactive={myTurn}
             onToggle={(heroId) => room.send({ t: "stage", heroId })}
+            suggesting={running && viewer?.role === "player" && !myTurn ? suggesting : undefined}
+            onSuggest={(heroId) => room.send({ t: "suggest", heroId, intent: suggesting })}
           />
+          {/* What the side has asked for, in the order most of them agree on —
+              which is what a captain actually reads with a clock running. */}
+          {running && projection.suggestions.length > 0 && (
+            <div className="asked-for">
+              <span className="note">{myTurn ? "Your side wants" : "Your side has asked for"}</span>
+              {projection.suggestions.slice(0, 6).map((entry) => (
+                <span key={entry.heroId} className="asked" title={[...entry.want, ...entry.ban].join(", ")}>
+                  {name(entry.heroId)}
+                  {entry.want.length > 0 && <em className="ask want">{entry.want.length}</em>}
+                  {entry.ban.length > 0 && <em className="ask ban">{entry.ban.length}</em>}
+                </span>
+              ))}
+            </div>
+          )}
+
           {myTurn && turn !== null && (
             <div className="confirm-bar">
               <span className="staged">
