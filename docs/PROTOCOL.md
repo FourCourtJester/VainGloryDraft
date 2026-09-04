@@ -158,7 +158,7 @@ is worked out from those turns rather than written separately.
   "roomId": "vWsxh4rNyic",
   "createdAt": 1788345973614,
   "phase": "complete",
-  "format": "Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick",
+  "format": "Aban, Bban, Aban, Bban, Apick, Bpick x2, Apick x2, Bpick",
   "mirrorPicks": false,
   "complete": true,
   "durationMs": 12900,

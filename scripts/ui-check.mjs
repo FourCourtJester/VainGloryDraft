@@ -128,7 +128,7 @@ check("the timer resolved B's ban unattended", autoBan !== "—" && autoBan.leng
 check("and play moved to the next turn", (await spectator.locator(".turn-label").textContent()).startsWith("Team A bans"));
 check("marks the timer's choice as auto", (await spectator.locator(".team-B .bans .auto").count()) === 1);
 check("leaves a captain's own ban unmarked", (await spectator.locator(".team-A .bans .auto").count()) === 0);
-check("shows how far through the draft the room is", (await spectator.locator(".progress").textContent()).includes("of 14"));
+check("shows how far through the draft the room is", (await spectator.locator(".progress").textContent()).includes("of 10"));
 await shot(spectator, "ui-spectator");
 
 // ── reusable links, mid-draft ───────────────────────────────────────────────
@@ -174,6 +174,58 @@ for (let index = 0; index < 12; index++) {
 check("guessing at codes gets shut out", lockout !== null);
 const watching = await fetch(`${BASE}/api/rooms/${roomAddress.split("/r/")[1]}/state?token=${new URL(spectatorLink).searchParams.get("token")}`);
 check("without shutting out spectators", watching.status === 200);
+
+// ── a double pick, on one clock ─────────────────────────────────────────────
+// Where the order gives a side two picks in a row, both go on a single turn:
+// two heroes staged together, one confirm, and neither committed until then.
+// A room of its own, with a long clock, so this is played rather than timed out.
+const pairRoom = await (
+  await fetch(`${BASE}/api/rooms`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ script: "Apick, Bpick x2", teamSize: 1, perTurnMs: 120_000 }),
+  })
+).json();
+
+const pairPlayer = async (code, who) => {
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+  watch(page, who);
+  await page.goto(`${BASE}/r/${pairRoom.roomId}?code=${code}`);
+  await page.waitForSelector("input[aria-label='Your name']", { timeout: 5_000 });
+  await page.fill("input[aria-label='Your name']", who);
+  await page.click("button.confirm");
+  await page.waitForSelector(".lobby, .turn", { timeout: 8_000 });
+  return page;
+};
+const pairA = await pairPlayer(pairRoom.codes.A, "Pia");
+const pairB = await pairPlayer(pairRoom.codes.B, "Bex");
+for (const page of [pairA, pairB]) await page.click(".ready-bar button");
+await pairA.waitForSelector(".turn", { timeout: 8_000 });
+
+await pairA.locator('button.hero[data-hero="ozo"]').click();
+await pairA.locator("button.confirm").click();
+await pairA.waitForFunction(() => document.querySelector(".turn-label")?.textContent?.includes("Team B"), null, { timeout: 8_000 });
+check("a double pick asks for two heroes at once", (await pairB.locator(".turn-label").textContent()) === "Team B picks 2");
+
+await pairB.locator('button.hero[data-hero="krul"]').click();
+await wait(300);
+check("one of the two is not enough to confirm", await pairB.locator("button.confirm").isDisabled());
+check("and the count says how many are still wanted", (await pairB.locator(".slots").textContent()).trim() === "1/2");
+check("nothing is committed while they think", (await pairB.locator(".team-B .picks li").allTextContents()).every((text) => text === "—"));
+
+await pairB.locator('button.hero[data-hero="krul"]').click();
+await wait(300);
+check("either hero can still be swapped out", (await pairB.locator("button.hero.staged").count()) === 0);
+
+await pairB.locator('button.hero[data-hero="krul"]').click();
+await pairB.locator('button.hero[data-hero="taka"]').click();
+await wait(300);
+check("both staged, the pair can be locked in", await pairB.locator("button.confirm").isEnabled());
+await pairB.locator("button.confirm").click();
+await wait(600);
+check("and both land together on one confirm", (await pairA.locator(".team-B .picks li").allTextContents()).filter((text) => text !== "—").length === 2);
+check("which finishes a two-turn draft", (await pairA.locator(".history").count()) === 1);
+for (const page of [pairA, pairB]) await page.close();
 
 // ── a whole squad in the lobby ──────────────────────────────────────────────
 // A second room, three a side, for the part that only shows up with a crowd:

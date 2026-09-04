@@ -245,6 +245,21 @@ describe("timeout", () => {
     expect(state.committed.at(-1)).toMatchObject({ auto: true, heroes: filled });
   });
 
+  it("fills both slots when a double pick was left untouched", () => {
+    // The other half of the same rule: a captain who staged nothing at all on a
+    // two-hero turn is given two, not one, and the draft still moves on.
+    let state = start();
+    state = play(state, "a");
+    state = play(state, "b");
+    state = play(state, "c");
+    const filled = autoFillSelection(state);
+    expect(filled).toHaveLength(2);
+    expect(new Set(filled).size).toBe(2);
+    state = must(resolveTimeout(state));
+    expect(state.committed.at(-1)).toMatchObject({ auto: true, heroes: filled, team: "B" });
+    expect(currentTurn(state)).toMatchObject({ team: "A", action: "pick" });
+  });
+
   it("is deterministic for a given seed and turn", () => {
     const first = autoFillSelection(start({ seed: "room-42" }));
     const second = autoFillSelection(start({ seed: "room-42" }));

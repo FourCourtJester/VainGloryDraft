@@ -28,11 +28,9 @@ without changing the token model.
 
 **5v5 ban/pick order: supplied, and it is the default.** Two bans each, then a
 1-2-2-2-2-1 snake:
-`Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick, Bpick, Apick, Apick, Bpick`.
+`Aban, Bban, Aban, Bban, Apick, Bpick x2, Apick x2, Bpick x2, Apick x2, Bpick`.
 Shipped as `vg-5v5-standard` with `official: true`, and pointed at by
-`DEFAULT_PRESET_ID`. Transcribed as fourteen single-hero turns, so a team picking
-twice in a row gets two clocks and two confirms; the one-clock reading is
-`Bpick x2` and remains a one-line change.
+`DEFAULT_PRESET_ID`.
 
 **Frontend: React + Vite.** As assumed in the handoff. A plain SPA over a
 WebSocket to the Durable Object; no SSR, since a room is entirely live state.
@@ -47,9 +45,10 @@ nothing structural, since the phase already exists.
 
 **3v3 order: the 5v5 order, cut short at three a side.** Two bans each, then
 1-2-2-1, with team A picking first and team B last —
-`Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick`. A strict
-prefix of the 5v5 script, and a test asserts that, since the rule it comes from
-is "the same as the fives, but three".
+`Aban, Bban, Aban, Bban, Apick, Bpick x2, Apick x2, Bpick`. It agrees with the
+5v5 order choice by choice, which is the rule it comes from, and a test asserts
+that. Not turn by turn, though: the threes stop partway through what the fives
+run as a double pick, so the test compares the two one selection at a time.
 
 **Rooms clear themselves out.** A finished draft is kept a month; a room nobody
 ever played in is thrown away six hours after the last sign of anybody in it.
@@ -74,8 +73,22 @@ handed a fresh allowance every time — which is exactly the case the daily
 ceiling exists for. What is written down deletes itself a day later, on the same
 principle as the rooms.
 
+**A double pick is one turn, on one clock.** Where the snake gives a team two
+picks in a row, they stage both heroes and lock them in together, rather than
+taking a fresh clock and a separate confirm for each. Two turns would hand a
+double pick twice the thinking time of a single one, which is not how the game
+plays; one turn also lets a captain rethink the pairing, since neither hero is
+committed until they confirm. Running out of time keeps whatever was staged and
+fills only the empty slots, so a captain who had decided on one of the two does
+not lose it.
+
+Whether a double-pick turn should get a longer clock than a single one is a
+separate question, and open. It would mean a per-turn time on the format rather
+than one figure for the whole draft.
+
 ## Still open
-- Whether a double pick in the 5v5 order is two clocks (as shipped) or one.
+- Whether a double-pick turn gets more time on the clock than a single pick.
+  Waiting on confirmation; it needs a per-turn override on the script.
 - Per-hero roles and icons, pending the vgna.net export. See
   [HERO_DATA.md](HERO_DATA.md).
 - Whether hero icons are self-hosted or served from vgna.net. The importer

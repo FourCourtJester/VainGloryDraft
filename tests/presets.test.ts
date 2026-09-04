@@ -36,10 +36,10 @@ describe("presets", () => {
 
   it("ships the 3v3 order as the 5v5 shape cut short at three a side", () => {
     expect(formatScript(resolveScript("vg-3v3-standard"))).toBe(
-      "Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick",
+      "Aban, Bban, Aban, Bban, Apick, Bpick x2, Apick x2, Bpick",
     );
     const totals = deriveTotals(resolveScript("vg-3v3-standard"));
-    expect(totals.turns).toBe(10);
+    expect(totals.turns).toBe(8);
     expect(totals.byTeam.A).toEqual({ picks: 3, bans: 2 });
     expect(totals.byTeam.B).toEqual({ picks: 3, bans: 2 });
   });
@@ -53,9 +53,13 @@ describe("presets", () => {
   });
 
   it("shares its opening with the 5v5 order, which is what makes it the same format", () => {
-    const threes = resolveScript("vg-3v3-standard");
-    const fives = resolveScript("vg-5v5-standard");
-    expect(fives.slice(0, threes.length)).toEqual(threes);
+    // Compared one selection at a time rather than one turn at a time: the
+    // threes stop partway through what the fives run as a double pick, so the
+    // orders agree on who chooses when without agreeing on where turns end.
+    const selections = (id: string): string[] =>
+      resolveScript(id).flatMap((turn) => Array.from({ length: turn.count }, () => `${turn.team}${turn.action}`));
+    const threes = selections("vg-3v3-standard");
+    expect(selections("vg-5v5-standard").slice(0, threes.length)).toEqual(threes);
   });
 
   it("has nothing left blocked", () => {
@@ -67,25 +71,28 @@ describe("presets", () => {
     expect(() => resolveScript("vg-2v2-standard")).toThrow(/Unknown preset/);
   });
 
-  it("ships the supplied 5v5 order verbatim", () => {
+  it("ships the supplied 5v5 order", () => {
     expect(formatScript(resolveScript("vg-5v5-standard"))).toBe(
-      "Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick, Bpick, Apick, Apick, Bpick",
+      "Aban, Bban, Aban, Bban, Apick, Bpick x2, Apick x2, Bpick x2, Apick x2, Bpick",
     );
   });
 
-  it("gives the 5v5 standard two bans and five picks a side across fourteen turns", () => {
+  it("gives the 5v5 standard two bans and five picks a side", () => {
     const totals = deriveTotals(resolveScript("vg-5v5-standard"));
-    expect(totals.turns).toBe(14);
+    expect(totals.turns).toBe(10);
     expect(totals.byTeam.A).toEqual({ picks: 5, bans: 2 });
     expect(totals.byTeam.B).toEqual({ picks: 5, bans: 2 });
   });
 
-  it("keeps each pick as its own turn, so a double pick is two confirms", () => {
-    // The order snakes, so a team sometimes picks twice in a row. Written as two
-    // separate turns, they get a fresh clock and a separate confirm for each.
-    // Treating the pair as one turn would give them a single clock for both,
-    // which is a materially different game and not what was asked for.
-    expect(resolveScript("vg-5v5-standard").every((turn) => turn.count === 1)).toBe(true);
+  it("takes a double pick as one turn, so both heroes are locked in together", () => {
+    // The order snakes, so a team sometimes picks twice in a row. Those two go
+    // on one clock and one confirm: the captain chooses both, and may change
+    // either until they lock the pair in. Giving each its own turn would hand a
+    // double pick twice the thinking time of a single one.
+    const doubles = resolveScript("vg-5v5-standard").filter((turn) => turn.count === 2);
+    expect(doubles).toHaveLength(4);
+    expect(doubles.every((turn) => turn.action === "pick")).toBe(true);
+    expect(resolveScript("vg-5v5-standard").every((turn) => turn.action === "ban" || turn.count <= 2)).toBe(true);
   });
 
   it("defaults a room to the 5v5 standard", () => {

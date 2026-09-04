@@ -106,16 +106,16 @@ The protocol — routes, messages, phases — is in [docs/PROTOCOL.md](docs/PROT
 `vg-5v5-standard`, the script a room gets if the organiser picks nothing:
 
 ```
-Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick, Bpick, Apick, Apick, Bpick
+Aban, Bban, Aban, Bban, Apick, Bpick x2, Apick x2, Bpick x2, Apick x2, Bpick
 ```
 
-Two bans each, then a 1-2-2-2-2-1 snake. Five picks a side, fourteen turns.
-`vg-3v3-standard` is the same script with the snake cut short at three a side —
-a strict prefix of it, which is what "the same as the fives, but three" means.
-Each pick is its own turn, so a team picking twice in a row gets **two clocks
-and two confirms**. If a double pick should instead be one clock and one
-confirm, that is `Bpick x2` — a one-line change to the preset, and the engine
-already handles it.
+Two bans each, then a 1-2-2-2-2-1 snake. Five picks a side.
+`vg-3v3-standard` is the same order with the snake cut short at three a side,
+which is what "the same as the fives, but three" means.
+
+`x2` marks a **double pick**: the team choosing twice in a row does both in one
+turn, on one clock. They stage two heroes and lock them in together, and may
+change either until they do.
 
 ## Waiting on data
 

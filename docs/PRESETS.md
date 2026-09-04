@@ -21,30 +21,34 @@ listings should print.
 ## The default: `vg-5v5-standard`
 
 ```
-Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick, Bpick, Apick, Apick, Bpick
+Aban, Bban, Aban, Bban, Apick, Bpick x2, Apick x2, Bpick x2, Apick x2, Bpick
 ```
 
-Two bans each, then a 1-2-2-2-2-1 snake pick order. Five picks a side, fourteen
+Two bans each, then a 1-2-2-2-2-1 snake pick order. Five picks a side across ten
 turns. `DEFAULT_PRESET_ID` points at it, so `defaultScript()` is what a room gets
 when the organiser chooses nothing.
 
-**Each pick is its own turn.** Transcribed exactly as supplied, so a team picking
-twice in a row (`…Bpick, Bpick…`) gets two clocks and two confirms. The
-alternative reading — one turn holding two heroes, staged together and confirmed
-once — is `Bpick x2`, which the engine supports equally well. Swapping is a
-one-line edit to the notation, but it changes how much time a double pick is
-worth, so it should be a decided change rather than a silent one.
+**A double pick is one turn.** Where the snake gives a team two picks in a row,
+`x2` runs both on a single clock: the captain stages two heroes and locks them in
+together, and may swap either right up until they confirm. If the clock runs out
+first, whatever they had staged is kept and only the empty slot is filled in for
+them. Running the pair as two separate turns instead would hand a double pick
+twice the thinking time of a single one, which is not how the game plays.
 
 ## `vg-3v3-standard`
 
 ```
-Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick
+Aban, Bban, Aban, Bban, Apick, Bpick x2, Apick x2, Bpick
 ```
 
 The 5v5 order with the pick snake cut short at three a side: two bans each, then
-1-2-2-1. Team A picks first, team B picks last. It is a strict prefix of the 5v5
-script — there is a test asserting exactly that, since "the same as the fives but
-three" is the rule it comes from.
+1-2-2-1. Team A picks first, team B picks last.
+
+It agrees with the 5v5 order choice by choice, which is the rule it comes from —
+"the same as the fives, but three". Not turn by turn, though: the threes stop
+partway through what the fives run as a double pick, so team B's last pick is a
+single one here. The test compares the two one selection at a time for exactly
+that reason.
 
 `PENDING` is now empty. If another format is ever needed and its order is not
 known, add it there rather than shipping a guess: `resolveScript` throws with the

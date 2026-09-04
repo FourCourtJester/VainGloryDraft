@@ -431,7 +431,7 @@ describe("persistence", () => {
 describe("defaults", () => {
   it("uses the 5v5 standard script and the full roster when nothing is specified", () => {
     const room = new Room(Room.create({}, T0));
-    expect(room.snapshot.draft.config.script).toHaveLength(14);
+    expect(room.snapshot.draft.config.script).toHaveLength(10);
     expect(room.snapshot.draft.config.heroPool.length).toBeGreaterThan(50);
     expect(room.snapshot.rules).toEqual(DEFAULT_TIMER_RULES);
   });

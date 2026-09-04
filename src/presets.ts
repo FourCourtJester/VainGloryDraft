@@ -53,19 +53,20 @@ export const PRESETS: readonly Preset[] = [
     "Vainglory 5v5 Standard",
     "5v5",
     true,
-    "Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick, Bpick, Apick, Apick, Bpick",
+    "Aban, Bban, Aban, Bban, Apick, Bpick x2, Apick x2, Bpick x2, Apick x2, Bpick",
     "Two bans each, then a snake pick order: 1-2-2-2-2-1. Five picks a side. " +
-      "Each pick is its own turn, so a team picking twice in a row gets two " +
-      "clocks and two confirms rather than staging both together.",
+      "A team picking twice in a row does both in one turn: they choose two " +
+      "heroes and lock them in together, on a single clock.",
   ),
   preset(
     "vg-3v3-standard",
     "Vainglory 3v3 Standard",
     "3v3",
     true,
-    "Aban, Bban, Aban, Bban, Apick, Bpick, Bpick, Apick, Apick, Bpick",
+    "Aban, Bban, Aban, Bban, Apick, Bpick x2, Apick x2, Bpick",
     "The 5v5 order with the pick snake cut short at three a side: two bans each, " +
-      "then 1-2-2-1. Team A picks first, team B picks last. Each pick is its own turn.",
+      "then 1-2-2-1. Team A picks first, team B picks last. A team picking twice " +
+      "in a row does both in one turn, on a single clock.",
   ),
 ];
 

@@ -30,9 +30,9 @@ Measured rather than guessed:
 
 - **A finished 5v5 draft takes 2.7 KB of storage**, so a gigabyte would hold
   around 390,000 of them. Storage will never be the thing that costs money.
-- **A draft wakes its room at most fourteen times** — once per turn, and only
-  when a turn's time actually runs out. A briskly played draft barely wakes it
-  at all.
+- **A draft wakes its room at most once per turn** — ten times for a 5v5, and
+  only when a turn's time actually runs out. A briskly played draft barely wakes
+  it at all.
 - **A room sleeps while captains are thinking.** Connections stay open, but the
   room is not sitting there running up time between clicks. Without that, a slow
   tournament would be the expensive case.
