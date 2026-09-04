@@ -30,23 +30,29 @@ is *derived* from the script. Nothing assumes "five picks a side".
 | `src/script.ts` | Script validation, derived totals, `parseScript`/`formatScript` notation |
 | `src/config.ts` | Room defaults: mirror picks off, auto-fill random |
 | `src/engine.ts` | The engine: current turn, legal heroes, staging, commit, timeout resolution |
+| `src/record.ts` | The account of a finished draft, derived from its turns |
 | `src/timer.ts` | Per-turn clock plus reserve bank. Pure: computes, never counts down |
 | `src/events.ts` | `pick \| ban \| turnChange \| draftComplete` and a subscription bus |
 | `src/projection.ts` | Per-token filtered views of the room |
 | `src/presets.ts` | Named scripts, including the default `vg-5v5-standard` |
 | `src/heroes.ts`, `data/heroes.json` | Static roster, checked in, never fetched at runtime |
 | `src/room/` | Room: engine + clock + tokens + connections. No Cloudflare imports |
+| `src/room/roster.ts` | Who is on each side, who leads, and who has said they are ready |
+| `src/room/suggestions.ts` | What a side has asked its own captain for |
+| `src/room/names.ts` | The name a player is offered before they type one |
 | `worker/` | Durable Object and Worker routes — a thin adapter over `Room` |
+| `worker/gatekeeper.ts` | One per address, so an open site cannot be scripted at |
 | `client/` | React + Vite SPA: the create screen and the draft room |
 | `scripts/make-logo.mjs` | Draws the mark and every icon size — see [docs/BRAND.md](docs/BRAND.md) |
+| `scripts/import-heroes.mjs` | Takes a vgna.net export and writes `data/heroes.json` |
 
 ```
 npm install
-npm test          # 126 tests
+npm test          # 239 tests
 npm run typecheck
 npm run dev       # builds the client, then wrangler dev on :8787
 npm run smoke     # protocol end-to-end against a running dev worker
-npm run ui-check  # the same in a real browser, three viewers at once
+npm run ui-check  # a real browser, a squad a side, each in its own window
 ```
 
 Open http://127.0.0.1:8787, create a room, and open the two captain links in
@@ -100,6 +106,15 @@ The protocol — routes, messages, phases — is in [docs/PROTOCOL.md](docs/PROT
 - **A finished draft is kept and can be read back.** Every turn is recorded in
   order, with the time it landed and whether the clock chose it, so opening the
   room later shows how the draft actually went rather than just its result.
+- **A room clears itself out.** A finished draft is kept a month; a room nobody
+  ever played in goes six hours after the last sign of anybody in it. The alarm
+  that runs the turn clock does the sweeping, so nothing has to be scheduled and
+  storage does not grow without limit.
+- **Anybody may start a draft.** Creation is open, because the tool is not meant
+  to belong to one org. Every address gets an allowance — five rooms in a burst,
+  one back every twenty seconds, a hundred a day — so an open site cannot be
+  scripted at. A tournament's own bot holds a key that skips the limit, and a
+  deployment that wants the door shut entirely can have that too.
 
 ## The formats
 
@@ -164,21 +179,23 @@ clock chose must never look like one a captain chose.
 Things a tournament organiser would hit, in rough order of how much they matter:
 
 - **No hero portraits or roles yet.** Waiting on the vgna.net export; the
-  importer and the UI are both ready for it.
-- **Rooms are kept forever.** That is deliberate — a finished draft can be
-  reopened weeks later — but it does mean storage only grows. A retention rule
-  is an organiser decision as much as a technical one.
-- **No organiser controls.** No start button (the room starts itself when both
-  captains connect), no remake, no undo. Deliberate for now: a remake is a new
-  room, and undo would need a rule about who may call it.
-- **Open CORS**, and no rate limiting beyond the code lockout. Room creation can
-  be closed off with `ROOM_CREATE_SECRET`; do that before going public, since the
-  free plan's daily request allowance is otherwise somebody else's to spend.
+  importer and the UI are both ready for it. The one gap that makes the tool
+  look unfinished.
+- **No list of past drafts.** A draft reopens from its own link, but nothing
+  enumerates them, and durable objects cannot be listed — so browsing them needs
+  an index written to as drafts finish. It also needs deciding whose history a
+  person may see, which is an organiser question before it is a technical one.
+- **No organiser controls.** No remake, no undo, no pause. Deliberate for now: a
+  remake is a new room, and the other two need a rule about who may call them,
+  which is a tournament's decision rather than this tool's.
+- **Open CORS.** Anything may call the API from anywhere. Fine while the only
+  reader is the app itself and a bot, worth narrowing if that changes.
 - **Never deployed.** `wrangler deploy` has not been run — everything here was
   verified against `wrangler dev` locally. See [docs/DEPLOYING.md](docs/DEPLOYING.md).
 
 ## Next
 
-Portraits and role data, once the scrape can be run; the 3v3 preset, once the
-order is supplied. Settled questions are recorded in
-[docs/DECISIONS.md](docs/DECISIONS.md).
+Portraits and role data, once the export arrives; deploying it somewhere public;
+and a list of past drafts, once it is settled who should be able to see whose.
+Settled questions are recorded in [docs/DECISIONS.md](docs/DECISIONS.md), and
+what is still open is at the end of it.
