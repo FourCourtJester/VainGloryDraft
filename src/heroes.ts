@@ -12,6 +12,7 @@ import type { Hero } from "./types.js";
 
 interface HeroFile {
   readonly verified: boolean;
+  readonly roles: readonly string[];
   readonly note: string;
   readonly roster: { readonly count: number; readonly source: string };
   readonly heroes: readonly {
@@ -56,7 +57,34 @@ export function heroesMissingRoles(): readonly Hero[] {
   return HEROES.filter((hero) => hero.roles.length === 0);
 }
 
-/** The roles captains can filter by, taken from the roster itself. */
+/**
+ * The three roles a Vainglory hero is drafted for, in the order a captain
+ * thinks about them.
+ *
+ * Confirmed by VGNA. A 5v5 side fields one captain, one jungler and three
+ * lanes, so "lane" covers three seats rather than naming each one — which is
+ * why there are three roles here and not five.
+ *
+ * Kept in the roster file beside the heroes it describes, so that the app and
+ * the import script read one list rather than each carrying their own copy to
+ * fall out of step with the other. Anything outside it is a mistake in whatever
+ * produced it rather than a fourth role, and the importer says so instead of
+ * quietly adding a filter nobody asked for.
+ */
+export const HERO_ROLES: readonly string[] = file.roles;
+
+export function isHeroRole(value: string): boolean {
+  return HERO_ROLES.includes(value);
+}
+
+/**
+ * The roles captains can actually filter by right now.
+ *
+ * Taken from the roster rather than from the list above, because a role no
+ * hero has been given yet would only be a filter that finds nothing. Empty
+ * until per-hero roles arrive, which is what keeps the filter hidden.
+ */
 export function allRoles(): readonly string[] {
-  return [...new Set(HEROES.flatMap((hero) => hero.roles))].sort();
+  const found = new Set(HEROES.flatMap((hero) => hero.roles));
+  return HERO_ROLES.filter((role) => found.has(role));
 }

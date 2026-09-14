@@ -23,10 +23,28 @@ build time, and never fetched at runtime from a site that may disappear.
   is worse than no filter. Portraits arriving does not change that: they are a
   different question from roles, and the flag is about roles.
 
-The intended role scrape could not be run from the environment this was written
-in: outbound network access is restricted to package registries, so
-`vaingloryfire.com` and both Fandom wikis are unreachable. Roles are still
-outstanding.
+## The three roles
+
+VGNA have confirmed the vocabulary: **Captain**, **Jungle**, **Lane**. A 5v5
+side fields one captain, one jungler and three lanes, so "lane" is one role
+covering three seats rather than naming each of them — which is why there are
+three and not five.
+
+The list lives in `data/heroes.json` beside the roster it describes, so the app
+and `import-heroes.mjs` read one copy rather than each holding their own to fall
+out of step. Anything outside it is a mistake in whatever produced the export
+rather than a fourth role: the importer drops it, says which hero and which
+value, and leaves that hero role-less — which keeps the file unverified and the
+filter hidden, rather than quietly offering a filter nobody asked for. Casing is
+tidied (`jungle` becomes `Jungle`) and order normalised, since exports capitalise
+as they please.
+
+**Which hero plays which role is still outstanding.** The vocabulary is not the
+data: nothing here knows that, say, Ardan is a Captain, and it will not be
+guessed at. Until a per-hero mapping arrives the filter stays hidden. The
+intended scrape could not be run from the environment this was written in —
+outbound network access is restricted to package registries, so
+`vaingloryfire.com` and both Fandom wikis are unreachable.
 
 ## Portraits
 

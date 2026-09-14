@@ -1,5 +1,10 @@
 {
   "verified": false,
+  "roles": [
+    "Captain",
+    "Jungle",
+    "Lane"
+  ],
   "note": "Hero NAMES only. roles and attackType are deliberately empty: per the design handoff they must be scraped from a reliable source, never invented. See docs/HERO_DATA.md. Portraits are not yet self-hosted, so image is null.",
   "roster": {
     "count": 58,
