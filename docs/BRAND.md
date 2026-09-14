@@ -1,15 +1,21 @@
 # The mark
 
-A **D** whose counter is a **V** — the two initials in one shape, so the badge is
-readable at the size of a browser tab and still says what it is.
+A **shield split down the middle** — one half the colour of team A, the other
+team B — with a **V** cut through the join, and a fine gold trim around it.
 
-The V is in the colour the app gives team B and the D in team A's, which means
-the two sides of a draft are in the badge itself.
+A draft is two sides facing each other over one board, so the badge is the two
+sides and the V is what they are drafting for. The same two colours run through
+the whole app, which means the badge and the draft screen say the same thing.
 
 It is an original mark. It is deliberately *not* a version of Vainglory's own
 logo: this is a community tool that will sit on public pages, and borrowing
 somebody else's mark is a problem waiting to happen for whoever runs the
 tournament.
+
+The trim comes off below 48px. A gold hairline at the size of a browser tab
+turns to mud and takes the shape with it, so the small favicons are the plain
+two-tone shield — which still reads at 16px, because that is what the shape was
+chosen for.
 
 ## The files
 
@@ -36,13 +42,28 @@ backdrop they choose, and a mark with nothing behind it would be lost.
 
 | | |
 |---|---|
-| Team A, and the D | `#4aa3ff` |
-| Team B, and the V | `#ff7a59` |
-| Background | `#12141a` |
+| Team A, the blue side, the shield's left half | `#00d4ff` |
+| Team B, the red side, the shield's right half | `#ff3b5c` |
+| The trim, and nothing else | `#e0a82e` |
+| Background | `#0e131c` |
 
-## The wordmark
+These two are the only strong colours in the app, and they never cross: a
+side's colour must never appear in the other side's slots, or in a control
+acting on the other side's behalf. Everything else on screen is a step on one
+grey ramp, which is what keeps a screen that dense readable.
 
-The name is set in whatever grotesque the machine has. That is fine for now and
-deliberately easy to change: if the project ever picks a real typeface, the
-wordmark is four lines in `scripts/make-logo.mjs`. The mark itself is pure
-geometry and does not depend on any font.
+Gold is reserved for the state of the room rather than for either side — the
+reserve clock, a finished draft, the hero the timer chose.
+
+## The typefaces
+
+The app sets anything read at a glance — the clock, the turn label, every
+uppercase label — in **Barlow Condensed**, and anything read properly in
+**Inter**. Condensed type is what lets a tournament HUD carry large, confident
+labels without breaking the grid.
+
+The wordmark image is still set in whatever grotesque the machine generating it
+has, because the generator renders without a browser. Worth matching to Barlow
+Condensed before anything goes on a stream overlay; it is four lines in
+`scripts/make-logo.mjs`. The mark itself is pure geometry and depends on no
+font at all.

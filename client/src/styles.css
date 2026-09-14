@@ -1,13 +1,50 @@
+/*
+ * The look of the draft room.
+ *
+ * A broadcast HUD rather than a web form: a dark ground, two faction colours
+ * that never cross sides, condensed uppercase for anything read at a glance,
+ * and a plain face for anything read properly. Corners are barely rounded and
+ * depth comes from thin lit edges rather than soft shadows, so a hero portrait
+ * stays the brightest thing on the screen.
+ *
+ * The two faction colours are the only strong colours here. Everything else is
+ * a step on one grey ramp, which is what keeps a screen this dense readable.
+ */
+
 :root {
-  --bg: #12141a;
-  --panel: #1b1f28;
-  --line: #2b3140;
-  --text: #e6e9ef;
-  --muted: #8b93a5;
-  --a: #4aa3ff;
-  --b: #ff7a59;
+  /* The ground, and the plates stacked on it. */
+  --void: #090b10;
+  --bg: #0e131c;
+  --surface-1: #0f141d;
+  --surface-2: #161e2e;
+  --surface-3: #1a2436;
+  --line: #1e293b;
+  --line-soft: #151d2a;
+
+  --text: #dee2ef;
+  --muted: #8896a8;
+  --faint: #5d6a7d;
+
+  /* Team A is the blue side and team B the red, in the draft and in the badge.
+     Nothing else on the screen may borrow either one. */
+  --a: #00d4ff;
+  --b: #ff3b5c;
+  --a-glow: rgba(0, 212, 255, 0.35);
+  --b-glow: rgba(255, 59, 92, 0.35);
+  --a-wash: rgba(0, 212, 255, 0.12);
+  --b-wash: rgba(255, 59, 92, 0.12);
+
+  /* Reserved for the state of the room itself rather than for either side. */
+  --gold: #fbbf24;
   --live: #45d19a;
-  --danger: #ff5c6c;
+  --danger: #ff3b5c;
+
+  --r: 3px;
+  --r-lg: 5px;
+
+  --display: "Barlow Condensed", "Arial Narrow", ui-sans-serif, sans-serif;
+  --body: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
   color-scheme: dark;
 }
 
@@ -15,479 +52,871 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(120% 80% at 50% 0%, #131a26 0%, var(--bg) 55%, var(--void) 100%)
+    no-repeat fixed;
   color: var(--text);
-  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 400 14px/1.5 var(--body);
+  -webkit-font-smoothing: antialiased;
 }
 
 button { font: inherit; cursor: pointer; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 
+/* Anything set in the condensed face is a label, so it is uppercase and spaced
+   out — at these sizes that is what makes it legible rather than shouty. */
+.note, .tag, .badge, .progress, .turn-label, .count { font-family: var(--display); }
+
+:focus-visible { outline: 2px solid var(--a); outline-offset: 2px; }
+
 /* ── room shell ─────────────────────────────────────────────────────────── */
 
-.room { max-width: 1200px; margin: 0 auto; padding: 16px; }
+.room {
+  /* Whichever side is on the clock lends its colour to everything that acts on
+     their behalf — the hero they are considering, the button that locks it in.
+     A side's colour never appears in the other side's controls. */
+  --active: var(--muted);
+  --active-glow: transparent;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 14px 16px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
 .room header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--surface-1) 80%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
 }
 
-.identity { display: flex; align-items: center; gap: 10px; }
-.identity .mark { display: block; }
-.room-id { color: var(--muted); }
+.room.side-A { --active: var(--a); --active-glow: var(--a-glow); }
+.room.side-B { --active: var(--b); --active-glow: var(--b-glow); }
+
+.identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.identity .mark { display: block; flex: none; }
+
+.room-id {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .badge {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--panel);
+  padding: 3px 9px;
+  border-radius: var(--r);
+  background: var(--surface-2);
   border: 1px solid var(--line);
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
-.badge.captain { border-color: var(--a); }
+.badge.player { border-color: color-mix(in srgb, var(--a) 45%, transparent); color: var(--a); }
+.badge.spectator { color: var(--muted); }
 
-.link-state { display: flex; align-items: center; gap: 6px; }
+.link-state { display: flex; align-items: center; gap: 6px; flex: none; }
 
 .presence {
   width: 22px;
   height: 22px;
-  border-radius: 50%;
+  border-radius: var(--r);
   display: grid;
   place-items: center;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--faint);
+}
+.presence.connected:first-child { color: var(--a); border-color: color-mix(in srgb, var(--a) 50%, transparent); }
+.presence.connected:nth-child(2) { color: var(--b); border-color: color-mix(in srgb, var(--b) 50%, transparent); }
+
+.socket {
+  font-family: var(--display);
   font-size: 12px;
   font-weight: 600;
-  border: 1px solid var(--line);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--live);
 }
-.presence.connected { background: rgba(69, 209, 154, 0.18); color: var(--live); border-color: var(--live); }
-.presence.disconnected { background: rgba(255, 92, 108, 0.12); color: var(--danger); border-color: var(--danger); }
+.socket.offline, .socket.closed { color: var(--danger); }
 
-.socket { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-.socket.live { color: var(--live); }
-.socket.offline { color: var(--danger); }
+/* ── the turn on the clock ──────────────────────────────────────────────── */
 
-.banner {
-  margin: 12px 0 0;
-  padding: 10px 12px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--muted);
-}
-.banner.done { color: var(--live); border-color: var(--live); }
-
-/* ── turn and clock ─────────────────────────────────────────────────────── */
-
+/* The centrepiece: whose turn it is, and how long they have. Big enough to
+   read from across a room, because in a tournament somebody usually is. */
 .turn {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+  background:
+    linear-gradient(180deg, var(--surface-2) 0%, var(--surface-1) 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  position: relative;
+  overflow: hidden;
+}
+/* A hairline of the colour of whoever is on the clock, along the top edge. */
+.turn::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: var(--faint);
+}
+.turn.side-A::before { background: var(--a); box-shadow: 0 0 16px var(--a-glow); }
+.turn.side-B::before { background: var(--b); box-shadow: 0 0 16px var(--b-glow); }
+
+.turn-label {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.turn.side-A .turn-label { color: var(--a); }
+.turn.side-B .turn-label { color: var(--b); }
+
+.progress {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.clock {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-family: var(--display);
+  font-size: 62px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+/* Down to the reserve, then nearly out: the clock says so before the numbers
+   do, because nobody reads digits under that kind of pressure. */
+.clock.bank { color: var(--gold); }
+.clock.urgent { color: var(--danger); animation: pulse 1s ease-in-out infinite; }
+
+@keyframes pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) {
+  .clock.urgent { animation: none; }
+}
+
+.bank-note {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  justify-self: end;
+  font-family: var(--display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.turn.mine { border-color: color-mix(in srgb, var(--a) 35%, var(--line)); }
+
+/* ── the order rail ─────────────────────────────────────────────────────── */
+
+/* Every turn of the draft in one strip, so anyone can see what has happened,
+   what is happening, and what is coming — which is the question a captain and
+   a caster both ask constantly. */
+.rail-wrap { overflow-x: auto; }
+
+.rail {
   display: flex;
-  align-items: baseline;
-  gap: 14px;
-  margin: 14px 0;
-  padding: 12px 16px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
+  gap: 3px;
+  min-width: max-content;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.turn.mine { border-color: var(--a); box-shadow: 0 0 0 1px rgba(74, 163, 255, 0.35); }
-.turn-label { font-size: 18px; font-weight: 600; }
-.clock { margin-left: auto; font-size: 30px; font-variant-numeric: tabular-nums; }
-.clock.bank { color: #ffcc66; }
-.clock.urgent { color: var(--danger); }
-.bank-note { color: var(--muted); font-size: 13px; }
 
-/* ── the lobby ──────────────────────────────────────────────────────────── */
-
-.lobby {
-  margin: 14px 0;
-  padding: 14px 16px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+.rail li {
+  flex: 1 1 0;
+  min-width: 84px;
+  padding: 7px 9px 8px;
+  background: var(--surface-1);
+  border: 1px solid var(--line-soft);
+  border-top: 2px solid var(--line);
+  border-radius: 0 0 var(--r) var(--r);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: background 0.15s ease;
 }
-.lobby-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
-.lobby h2 { margin: 0; font-size: 16px; }
+.rail li.A { border-top-color: color-mix(in srgb, var(--a) 55%, transparent); }
+.rail li.B { border-top-color: color-mix(in srgb, var(--b) 55%, transparent); }
 
-.squads { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.squad h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; }
-.squad.team-A h3 { color: var(--a); }
-.squad.team-B h3 { color: var(--b); }
-.squad ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
-.squad li {
+.rail .slot-label {
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.rail li.A .slot-label { color: color-mix(in srgb, var(--a) 75%, var(--muted)); }
+.rail li.B .slot-label { color: color-mix(in srgb, var(--b) 75%, var(--muted)); }
+
+.rail .slot-heroes {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rail li.pending .slot-heroes { color: var(--faint); }
+.rail li.done { background: var(--surface-2); }
+
+/* The turn actually on the clock, lit in its side's colour. */
+.rail li.now {
+  background: var(--surface-3);
+  border-color: var(--line);
+}
+.rail li.now.A { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a) 60%, transparent), 0 0 14px var(--a-glow); }
+.rail li.now.B { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--b) 60%, transparent), 0 0 14px var(--b-glow); }
+.rail li.now .slot-heroes { color: var(--text); font-weight: 600; }
+
+.rail .auto { margin-left: 4px; }
+
+/* ── the board ──────────────────────────────────────────────────────────── */
+
+.board {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr) 250px;
+  gap: 12px;
+  align-items: start;
+}
+
+.middle { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+/* ── a side's picks and bans ────────────────────────────────────────────── */
+
+.team {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.team.active.team-A { border-color: color-mix(in srgb, var(--a) 45%, var(--line)); box-shadow: 0 0 18px var(--a-glow); }
+.team.active.team-B { border-color: color-mix(in srgb, var(--b) 45%, var(--line)); box-shadow: 0 0 18px var(--b-glow); }
+
+.team h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.team-A h2 { color: var(--a); }
+.team-B h2 { color: var(--b); }
+
+.team h3 {
+  margin: 4px 0 0;
+  font-family: var(--display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.picks, .bans { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.picks li {
+  padding: 9px 10px;
+  border-radius: var(--r);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--line);
+  font-size: 14px;
+  font-weight: 500;
+  min-height: 36px;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 10px;
-  border-radius: 7px;
-  background: #232836;
-  font-size: 14px;
+  gap: 6px;
 }
-.squad li.away { opacity: 0.5; }
-.squad li.empty { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
-.squad .who { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.squad .who em { color: var(--muted); font-style: normal; }
-.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); flex: none; }
-.dot.ready { background: var(--live); }
-.tag.lead { color: var(--live); border: 1px solid var(--live); border-radius: 4px; padding: 0 5px; font-size: 10px; }
+.team-A .picks li.filled { border-left-color: var(--a); }
+.team-B .picks li.filled { border-left-color: var(--b); }
+.picks li.empty, .bans li.empty { color: var(--faint); background: var(--surface-1); }
 
-.hand-over, .claim {
-  background: transparent;
-  border: 1px solid var(--line);
+.bans li {
+  padding: 5px 9px;
+  border-radius: var(--r);
+  background: var(--surface-1);
+  border: 1px solid var(--line-soft);
+  font-size: 13px;
   color: var(--muted);
-  border-radius: 6px;
-  padding: 3px 8px;
-  font-size: 12px;
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--danger) 70%, transparent);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-.hand-over:hover, .claim:hover { color: var(--text); border-color: var(--a); }
-.claim { margin-top: 8px; }
+.bans li.empty { text-decoration: none; }
 
-.start-anyway { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
-.claim.agreed { border-color: var(--live); color: var(--live); }
+/* A hero the clock chose must never be mistakeable for one somebody picked. */
+.auto {
+  font-family: var(--display);
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold);
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  border-radius: 2px;
+  padding: 0 3px;
+}
 
-.ready-bar { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
-.ready-off { background: transparent; color: var(--text); border-color: var(--line); }
+/* ── your own squad, mid-draft ──────────────────────────────────────────── */
 
-/* Your own squad, alongside the draft. */
-.strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; }
-.strip .chip {
+.strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+}
+.strip.team-A { border-left: 2px solid var(--a); }
+.strip.team-B { border-left: 2px solid var(--b); }
+
+.note {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--panel);
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: var(--r);
+  background: var(--surface-2);
   border: 1px solid var(--line);
   font-size: 13px;
 }
-.strip .chip.away { opacity: 0.5; }
-.strip .chip.lead { border-color: var(--live); }
+.chip.lead { border-color: color-mix(in srgb, var(--gold) 45%, transparent); color: var(--gold); }
+.chip.away { opacity: 0.45; }
 
-@media (max-width: 860px) {
-  .squads { grid-template-columns: 1fr; }
-}
-
-/* ── how the draft went ─────────────────────────────────────────────────── */
-
-.history {
-  margin: 14px 0;
-  padding: 12px 16px;
-  background: var(--panel);
+.hand-over, .claim, .start-anyway {
+  background: transparent;
   border: 1px solid var(--line);
-  border-radius: 10px;
-}
-.history-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
-.history h2 { margin: 0 0 4px; font-size: 15px; }
-.history-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; }
-.history-turn {
-  display: grid;
-  grid-template-columns: 24px 20px 58px 1fr auto auto;
-  gap: 10px;
-  align-items: center;
-  padding: 5px 8px;
-  border-radius: 6px;
-  font-size: 14px;
-}
-.history-turn:nth-child(odd) { background: rgba(255, 255, 255, 0.025); }
-.history-number { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
-.history-turn.team-A .history-team { color: var(--a); font-weight: 600; }
-.history-turn.team-B .history-team { color: var(--b); font-weight: 600; }
-.history-action { color: var(--muted); }
-.history-took { color: var(--muted); font-variant-numeric: tabular-nums; }
-
-@media (max-width: 860px) {
-  .history-turn { grid-template-columns: 22px 18px 1fr auto; }
-  .history-action { display: none; }
-}
-
-/* ── board ──────────────────────────────────────────────────────────────── */
-
-.board { display: grid; grid-template-columns: 190px 1fr 190px; gap: 16px; margin-top: 8px; }
-
-.team {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 12px;
-}
-.team.active { border-color: var(--live); }
-.team h2 { margin: 0 0 8px; font-size: 15px; }
-.team-A h2 { color: var(--a); }
-.team-B h2 { color: var(--b); }
-.team h3 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.06em; }
-
-.picks, .bans { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.picks li, .bans li {
-  padding: 7px 9px;
-  border-radius: 6px;
-  background: #232836;
-  font-size: 14px;
-}
-.picks li, .bans li { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.auto {
-  font-size: 10px;
+  border-radius: 2px;
+  color: var(--muted);
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #ffcc66;
-  border: 1px solid rgba(255, 204, 102, 0.5);
-  border-radius: 4px;
-  padding: 0 4px;
+  padding: 2px 6px;
 }
-.progress { color: var(--muted); font-size: 13px; }
+.hand-over:hover, .claim:hover, .start-anyway:hover { color: var(--text); border-color: var(--a); }
 
-.picks li.empty, .bans li.empty { color: var(--muted); background: transparent; border: 1px dashed var(--line); }
-.bans li { text-decoration: line-through; color: var(--muted); }
+/* ── the hero pool ──────────────────────────────────────────────────────── */
 
-.middle { min-width: 0; }
-
-/* ── hero pool ──────────────────────────────────────────────────────────── */
-
-.pool-filters { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.pool-filters input[type="search"], .pool-filters select, .create input, .create select {
-  background: var(--panel);
-  color: var(--text);
+.pool {
+  background: var(--surface-1);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 7px 9px;
+  border-radius: var(--r-lg);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.count, .note { color: var(--muted); font-size: 13px; }
+
+.pool-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.pool-filters input[type="search"],
+.pool-filters select,
+.join input,
+.create input,
+.create select {
+  background: var(--void);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  color: var(--text);
+  font: inherit;
+  padding: 8px 10px;
+}
+.pool-filters input[type="search"] { flex: 1 1 220px; }
+.pool-filters input:focus, .pool-filters select:focus,
+.join input:focus, .create input:focus, .create select:focus {
+  outline: none;
+  border-color: var(--a);
+  box-shadow: 0 0 0 1px var(--a);
+}
+
+.count { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
 
 .grid {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
-  gap: 6px;
-  max-height: 58vh;
-  overflow-y: auto;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 5px;
 }
 
 .hero {
   width: 100%;
-  text-align: left;
-  padding: 9px 10px;
-  border-radius: 7px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--text);
+  position: relative;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 5px;
+  padding: 9px 6px;
+  min-height: 62px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  color: var(--text);
+  text-align: center;
+  transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+}
+.hero:not(:disabled):hover {
+  background: var(--surface-3);
+  border-color: color-mix(in srgb, var(--active) 55%, transparent);
+  transform: translateY(-1px);
 }
 .hero:disabled { cursor: default; }
-.hero:not(:disabled):hover { border-color: var(--a); }
-.hero.staged { border-color: var(--a); background: rgba(74, 163, 255, 0.16); }
-.hero.banned { opacity: 0.4; text-decoration: line-through; }
-.hero.picked-A { opacity: 0.55; border-color: var(--a); }
-.hero.picked-B { opacity: 0.55; border-color: var(--b); }
-/* Both teams hold this hero, which some rooms allow. */
-.hero.picked-AB { opacity: 0.55; border-color: var(--muted); }
-.hero-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.hero-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 5px;
-  object-fit: cover;
-  background: #232836;
-  flex: none;
-}
-.hero.has-icon { gap: 8px; }
-/* Heroes that are gone should read as gone at a glance, portraits included. */
-.hero.banned .hero-icon { filter: grayscale(1); }
-.hero.picked-A .hero-icon, .hero.picked-B .hero-icon, .hero.picked-AB .hero-icon { filter: grayscale(0.6); }
-.tag { font-size: 10px; text-transform: uppercase; color: var(--muted); }
 
-/* ── what a side has asked for ──────────────────────────────────────────── */
+.hero-icon { border-radius: 2px; display: block; }
+.hero-name {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+/* Staged, not yet locked in: lit, but clearly still a proposal. */
+.hero.staged {
+  background: var(--surface-3);
+  border-color: var(--active);
+  box-shadow: 0 0 14px var(--active-glow);
+}
+
+/* Gone, and why. A banned hero is struck through; a picked one wears the
+   colour of whoever took it. */
+.hero.banned { opacity: 0.32; }
+.hero.banned .hero-name { text-decoration: line-through; }
+.hero.picked-A, .hero.picked-B, .hero[class*="picked-"] { opacity: 0.4; }
+.hero[class*="picked-A"] { border-color: color-mix(in srgb, var(--a) 40%, transparent); }
+.hero[class*="picked-B"] { border-color: color-mix(in srgb, var(--b) 40%, transparent); }
+
+.tag {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--void);
+  border-radius: 2px;
+  padding: 1px 4px;
+}
+
+/* What a teammate has asked for, counted on the tile itself. */
+.asks { position: absolute; top: 3px; right: 3px; display: flex; gap: 2px; }
+.ask {
+  font-family: var(--display);
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 2px;
+  padding: 0 4px;
+  line-height: 1.4;
+}
+.ask.want { background: color-mix(in srgb, var(--live) 25%, var(--void)); color: var(--live); }
+.ask.ban { background: color-mix(in srgb, var(--danger) 25%, var(--void)); color: var(--danger); }
+
+.hero.marked-want { border-color: color-mix(in srgb, var(--live) 60%, transparent); }
+.hero.marked-ban { border-color: color-mix(in srgb, var(--danger) 60%, transparent); }
+
+/* ── telling your captain ───────────────────────────────────────────────── */
 
 .suggest-bar, .asked-for {
   display: flex;
   align-items: center;
-  gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-.suggest-bar .mode {
-  background: transparent;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-1);
   border: 1px solid var(--line);
-  color: var(--muted);
-  border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 13px;
+  border-radius: var(--r-lg);
 }
-.suggest-bar .mode.want.on { border-color: var(--live); color: var(--live); }
-.suggest-bar .mode.ban.on { border-color: var(--danger); color: var(--danger); }
+
+.mode {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  color: var(--muted);
+  font-family: var(--display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+}
+.mode.want.on { border-color: var(--live); color: var(--live); background: color-mix(in srgb, var(--live) 12%, var(--surface-2)); }
+.mode.ban.on { border-color: var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--surface-2)); }
 
 .asked {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--panel);
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: var(--r);
+  background: var(--surface-2);
   border: 1px solid var(--line);
   font-size: 13px;
 }
-.ask {
-  font-style: normal;
-  font-size: 11px;
-  border-radius: 4px;
-  padding: 0 5px;
-  font-weight: 600;
-}
-.ask.want { background: rgba(69, 209, 154, 0.18); color: var(--live); }
-.ask.ban { background: rgba(255, 92, 108, 0.16); color: var(--danger); }
 
-.asks { display: inline-flex; gap: 3px; flex: none; }
-/* A hero this player marked themselves. */
-.hero.marked-want { box-shadow: inset 2px 0 0 var(--live); }
-.hero.marked-ban { box-shadow: inset 2px 0 0 var(--danger); }
-
-/* ── confirm ────────────────────────────────────────────────────────────── */
+/* ── locking a choice in ────────────────────────────────────────────────── */
 
 .confirm-bar {
-  margin-top: 12px;
-  padding: 10px 12px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
+  border-radius: var(--r-lg);
 }
-.confirm-bar.watching { color: var(--muted); }
-.staged { display: flex; align-items: center; gap: 8px; }
-.slots { color: var(--muted); font-size: 13px; }
+.confirm-bar.watching { background: var(--surface-1); }
+
+.staged {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  min-width: 0;
+}
+
+.slots {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 1px 6px;
+}
 
 .confirm {
-  margin-left: auto;
-  padding: 9px 18px;
-  border-radius: 7px;
-  border: 1px solid var(--a);
-  background: var(--a);
-  color: #0b1220;
-  font-weight: 600;
+  background: var(--active);
+  border: none;
+  border-radius: var(--r);
+  color: var(--void);
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 11px 26px;
+  box-shadow: 0 0 20px var(--active-glow);
+  transition: filter 0.12s ease;
+  flex: none;
 }
-.confirm:disabled { opacity: 0.4; cursor: not-allowed; }
+.confirm:hover:not(:disabled) { filter: brightness(1.12); }
+.confirm:disabled {
+  background: var(--surface-3);
+  color: var(--faint);
+  box-shadow: none;
+  cursor: default;
+}
+
+/* ── lobby ──────────────────────────────────────────────────────────────── */
+
+.lobby {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lobby-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.lobby-head h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.squads { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+
+.squad {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.squad.team-A { border-top: 2px solid var(--a); }
+.squad.team-B { border-top: 2px solid var(--b); }
+.squad h3 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.squad.team-A h3 { color: var(--a); }
+.squad.team-B h3 { color: var(--b); }
+
+.ready-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ready-off { background: var(--surface-3); color: var(--text); box-shadow: none; }
+
+.banner {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.banner.done {
+  border-color: color-mix(in srgb, var(--gold) 45%, transparent);
+  color: var(--gold);
+  box-shadow: 0 0 24px rgba(251, 191, 36, 0.18);
+}
+
+/* ── how the draft went ─────────────────────────────────────────────────── */
+
+.history {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.history-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.history-head h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+
+.history-turn {
+  display: grid;
+  grid-template-columns: 34px 88px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--line);
+  border-radius: var(--r);
+  font-size: 13px;
+}
+.history-turn.team-A { border-left-color: var(--a); }
+.history-turn.team-B { border-left-color: var(--b); }
+
+.history-number, .history-action, .history-took {
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.history-took { font-variant-numeric: tabular-nums; }
+
+/* ── create and join ────────────────────────────────────────────────────── */
+
+.create, .join, .loading {
+  max-width: 640px;
+  margin: 48px auto;
+  padding: 24px;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.create h1, .join h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.brand { display: flex; align-items: center; gap: 12px; }
+
+.create label, .join label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); }
+
+.links { display: flex; flex-direction: column; gap: 10px; }
+.link-body { display: flex; flex-direction: column; gap: 4px; }
+.links code, .code-chip {
+  display: block;
+  background: var(--void);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 8px 10px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.code-chip {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-align: center;
+  color: var(--a);
+}
+
+.warn {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  color: #ffd7dc;
+  font-size: 13px;
+}
+
+.loading { text-align: center; color: var(--muted); }
 
 .toast {
   position: fixed;
-  bottom: 18px;
   left: 50%;
+  bottom: 20px;
   transform: translateX(-50%);
-  background: var(--danger);
-  color: #1a0d10;
-  border: none;
-  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 18%, var(--void));
+  border: 1px solid var(--danger);
+  border-radius: var(--r);
+  color: #ffd7dc;
   padding: 10px 16px;
-  font-weight: 600;
+  font-size: 13px;
+  z-index: 10;
 }
 
-.loading { display: grid; place-items: center; height: 100vh; color: var(--muted); }
+/* ── the footer plate ───────────────────────────────────────────────────── */
 
-/* ── create ─────────────────────────────────────────────────────────────── */
-
-.create { max-width: 640px; margin: 0 auto; padding: 32px 16px; display: grid; gap: 14px; }
-.create h1 { margin: 0; font-size: 24px; }
-.brand { display: flex; align-items: center; gap: 12px; font-size: 20px; letter-spacing: 0.01em; }
-.brand strong { font-weight: 700; }
-.brand span { color: var(--muted); }
-.brand strong { color: var(--text); }
-.create label { display: grid; gap: 6px; font-size: 14px; }
-.create label.row { display: flex; align-items: center; gap: 8px; }
-.create .confirm { margin: 6px 0 0; justify-self: start; }
-.warn { color: #ffcc66; font-size: 14px; margin: 0; }
-
-.join form { display: grid; gap: 14px; justify-items: start; }
-.join .code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 24px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  width: 100%;
-  max-width: 260px;
-}
-
-.links { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.links li {
-  display: grid;
-  grid-template-columns: 90px 1fr auto;
-  gap: 10px;
+.room-footer {
+  display: flex;
   align-items: center;
-  background: var(--panel);
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--surface-1) 70%, transparent);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 9px 11px;
+  border-radius: var(--r-lg);
+  margin-top: 4px;
 }
-.link-body { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.links code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.code-chip {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-style: normal;
-  font-size: 15px;
-  letter-spacing: 0.16em;
-  color: var(--text);
-  background: #232836;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 3px 9px;
-  flex: none;
+.room-footer .wordmark {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
-.links button { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 4px 10px; }
+.room-footer .vgd { color: var(--a); font-size: 12px; letter-spacing: 0.2em; }
+.room-footer .sep { color: var(--line); }
+.room-footer .format {
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
 
-/* ── phones ─────────────────────────────────────────────────────────────── */
+/* ── narrower screens ───────────────────────────────────────────────────── */
 
-@media (max-width: 860px) {
-  .room { padding: 10px; }
-
+/* Most of these players are on a phone, so the three-column board folds into
+   one: the clock and the order first, then the pool, then each side. */
+@media (max-width: 1080px) {
   .board { grid-template-columns: 1fr; }
+  .team { order: 2; }
+  .middle { order: 1; }
+}
 
-  /* On a phone, put the heroes first. A captain is here to choose one, and
-     should not have to scroll past two mostly empty team panels to reach them.
-     The page then scrolls as one, rather than trapping the heroes in a panel
-     that scrolls by itself. */
-  .middle { order: -1; }
-  .grid { max-height: none; overflow-y: visible; }
-
-  /* The team panels become small rows. They are there to be glanced at. */
-  .team { padding: 10px 12px; }
-  .team h2 { margin-bottom: 6px; }
-  .team h3 { margin: 10px 0 4px; }
-  .picks, .bans { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
-  .picks li, .bans li { padding: 6px; font-size: 13px; justify-content: center; text-align: center; }
-  .picks li span, .bans li span { display: none; }
-  .picks li.filled, .bans li:not(.empty) { position: relative; }
-  /* Still show which heroes the clock chose, as a dot where a word will not fit. */
-  .picks li .auto, .bans li .auto {
-    display: block;
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 5px;
-    height: 5px;
-    padding: 0;
-    border-radius: 50%;
-    background: #ffcc66;
-    border: none;
-    overflow: hidden;
-    text-indent: -99px;
-  }
-
-  .turn { flex-wrap: wrap; gap: 8px 12px; padding: 10px 12px; }
-  .turn-label { font-size: 16px; }
-  .clock { font-size: 26px; }
-
-  /* The confirm button follows the captain down the list so it is always within
-     reach. The list leaves room for it at the end, so no hero can end up stuck
-     behind it where nobody could pick it. */
-  .confirm-bar {
-    position: sticky;
-    bottom: 8px;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
-  }
-  .grid { padding-bottom: 64px; }
-
-  .links li { grid-template-columns: 1fr auto; }
-  .links .link-label { grid-column: 1 / -1; }
+@media (max-width: 700px) {
+  .room { padding: 10px 12px 24px; gap: 10px; }
+  .turn { padding: 10px 12px; gap: 10px; }
+  .turn-label { font-size: 19px; }
+  .clock { font-size: 42px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); }
+  .confirm-bar { flex-direction: column; align-items: stretch; gap: 10px; }
+  .confirm { width: 100%; }
+  .staged { font-size: 18px; justify-content: space-between; }
+  .room-footer .format { display: none; }
+  .rail li { min-width: 72px; }
 }

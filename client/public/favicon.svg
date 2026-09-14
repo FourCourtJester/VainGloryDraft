@@ -1,1 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128"><path d="M14 14 L62 14 C92 14 114 36 114 64 C114 92 92 114 62 114 L14 114 Z" fill="#4aa3ff"/><path d="M41 34 L54 34 L66 72 L78 34 L91 34 L72 92 L60 92 Z" fill="#ff7a59"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs><clipPath id="shield"><path d="M64 18 L109 31 V67 C109 92 89 107 64 115 C39 107 19 92 19 67 V31 Z"/></clipPath></defs>
+  <path d="M64 12 L114 27 V67 C114 94 92 111 64 120 C36 111 14 94 14 67 V27 Z" fill="#e0a82e"/>
+  <g clip-path="url(#shield)">
+    <rect x="0" y="0" width="64" height="128" fill="#00d4ff"/>
+    <rect x="64" y="0" width="64" height="128" fill="#ff3b5c"/>
+  </g>
+  <path d="M40 40 L55 40 L64 74 L73 40 L88 40 L71 96 L57 96 Z" fill="#f2f6ff"/></svg>

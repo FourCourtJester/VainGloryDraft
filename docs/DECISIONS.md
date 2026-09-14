@@ -86,6 +86,28 @@ Whether a double-pick turn should get a longer clock than a single one is a
 separate question, and open. It would mean a per-turn time on the format rather
 than one figure for the whole draft.
 
+**The look comes from the supplied design; the rules do not.** A design was
+commissioned externally (Google Stitch, "Halcyon Draft HUD") and its visual
+language is what the app now wears: the dark layered ground, the two faction
+colours, Barlow Condensed for anything read at a glance with Inter for anything
+read properly, micro-radius corners, and depth from thin lit edges rather than
+soft shadows.
+
+Where that design implied *behaviour*, the behaviour already settled here wins,
+because the design was drawn without knowledge of it. Specifically ignored: its
+own ban/pick order (it shows a second ban phase and twelve slots); five ban
+slots a side; lane and role assignment per player, which this tool does not
+model at all; per-hero win rate, pick rate and "draft synergy" figures, for
+which there is no data and no source; and a "counter pick" state that is not a
+thing the engine has. Its role filter chips are kept as a shape but stay
+unavailable until hero roles arrive, since a filter that hides the hero somebody
+was looking for is worse than no filter.
+
+The mark was redrawn to match: a shield split between the two sides with a V
+through the join, replacing the D-with-a-V-counter. Redrawn as vector rather
+than kept as the supplied image, which was a bitmap on someone else's CDN and
+would have rotted.
+
 ## Still open
 - Whether a double-pick turn gets more time on the clock than a single pick.
   Waiting on confirmation; it needs a per-turn override on the script.

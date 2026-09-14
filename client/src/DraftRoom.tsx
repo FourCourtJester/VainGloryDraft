@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DraftProjection } from "../../src/projection.js";
 import type { Hero, Team } from "../../src/types.js";
 import { DraftHistory } from "./DraftHistory.js";
@@ -73,7 +73,7 @@ export function DraftRoom({ roomId, credential, name: playerName, onRejoin }: Pr
   const onBank = turnRemaining <= 0 && remaining > 0;
 
   return (
-    <div className="room">
+    <div className={`room${turn === null ? "" : ` side-${turn.team}`}`}>
       <header>
         <div className="identity">
           <img className="mark" src="/logo.svg" alt="Vainglory Draft" width={26} height={26} />
@@ -109,7 +109,7 @@ export function DraftRoom({ roomId, credential, name: playerName, onRejoin }: Pr
       {projection.record !== null && <DraftHistory record={projection.record} name={name} />}
 
       {running && turn !== null && (
-        <div className={`turn ${myTurn ? "mine" : ""}`}>
+        <div className={`turn side-${turn.team} ${myTurn ? "mine" : ""}`}>
           <span className="turn-label">{describeTurn(turn)}</span>
           <span className="progress">
             turn {projection.turnIndex + 1} of {projection.script.length}
@@ -124,6 +124,8 @@ export function DraftRoom({ roomId, credential, name: playerName, onRejoin }: Pr
           )}
         </div>
       )}
+
+      {(running || room.phase === "complete") && <OrderRail projection={projection} name={name} />}
 
       {running && viewer?.role === "player" && (
         <TeamStrip
@@ -211,11 +213,80 @@ export function DraftRoom({ roomId, credential, name: playerName, onRejoin }: Pr
         <TeamColumn team="B" projection={projection} name={name} />
       </div>
 
+      <footer className="room-footer">
+        <span className="wordmark">
+          <img src="/logo.svg" alt="" width={22} height={22} />
+          Vainglory Draft
+          <span className="sep">/</span>
+          <span className="vgd">VGD</span>
+        </span>
+        <span className="format">
+          {projection.script.length} turns &middot; {totalOf(projection.script, "ban")} bans &middot;{" "}
+          {totalOf(projection.script, "pick")} picks
+        </span>
+      </footer>
+
       {room.error !== null && (
         <button type="button" className="toast" onClick={room.dismissError}>
           {room.error.message}
         </button>
       )}
+    </div>
+  );
+}
+
+/** How many heroes a whole draft bans, or picks, across both sides. */
+function totalOf(script: DraftProjection["script"], action: "ban" | "pick"): number {
+  return script.reduce((total, turn) => (turn.action === action ? total + turn.count : total), 0);
+}
+
+/**
+ * Every turn of the draft in one strip, left to right.
+ *
+ * What has been taken, what is being decided now, and what is still to come.
+ * It answers the question a captain asks constantly with a clock running —
+ * "what do they get next?" — without anybody having to hold the order in their
+ * head, and it is the same strip a finished draft is read back from.
+ */
+function OrderRail({
+  projection,
+  name,
+}: {
+  readonly projection: DraftProjection;
+  readonly name: (id: string) => string;
+}): JSX.Element {
+  const active = useRef<HTMLLIElement | null>(null);
+
+  // On a phone the rail is wider than the screen, so the turn on the clock is
+  // brought into view rather than left somewhere off to the right.
+  useEffect(() => {
+    active.current?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  }, [projection.turnIndex]);
+
+  return (
+    <div className="rail-wrap">
+      <ol className="rail">
+        {projection.script.map((turn, index) => {
+          const taken = projection.committed[index];
+          const state = taken !== undefined ? "done" : index === projection.turnIndex ? "now" : "pending";
+          return (
+            <li key={index} className={`${turn.team} ${state}`} ref={state === "now" ? active : null}>
+              <span className="slot-label">
+                {turn.team} {turn.action}
+                {turn.count > 1 && ` \u00d7${turn.count}`}
+              </span>
+              <span className="slot-heroes">
+                {taken === undefined
+                  ? state === "now"
+                    ? "on the clock"
+                    : "\u2014"
+                  : taken.heroes.map(name).join(" + ")}
+                {taken?.auto === true && <span className="auto">auto</span>}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
