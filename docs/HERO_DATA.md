@@ -4,27 +4,62 @@ Vainglory is no longer in development, so the roster is fixed and there is
 nothing to keep in sync. `data/heroes.json` is checked into the repo, read at
 build time, and never fetched at runtime from a site that may disappear.
 
-## Current state: names only, unverified
+## Current state: names and portraits, no roles
 
 ```json
-{ "verified": false, "heroes": [{ "id": "san-feng", "name": "San Feng", "roles": [], "attackType": null, "image": null }] }
+{ "verified": false, "heroes": [{ "id": "ozo", "name": "Ozo", "roles": [], "attackType": null, "image": "/heroes/ozo.webp" }] }
 ```
 
 - **58 hero names.** Assembled from the design handoff plus community roster
   listings.
-- **`roles: []` and `attackType: null` everywhere, on purpose.** The handoff is
-  explicit that per-hero role data must not be invented. Empty is honest;
-  plausible-looking guesses would silently mislead a captain filtering a wall of
-  58 portraits.
-- **`image: null`.** Portraits are not yet self-hosted.
+- **57 portraits**, supplied by VGNA from their own bot's asset set and
+  self-hosted here. Corpus has none, and is drawn as a name — see below.
+- **`roles: []` and `attackType: null` everywhere, still on purpose.** The
+  handoff is explicit that per-hero role data must not be invented. Empty is
+  honest; plausible-looking guesses would silently mislead a captain filtering a
+  wall of 58 portraits.
 - The file-level `verified` flag is exported as `HERO_DATA_VERIFIED`. **The UI
   must not offer role filtering while it is false** — a filter over invented data
-  is worse than no filter.
+  is worse than no filter. Portraits arriving does not change that: they are a
+  different question from roles, and the flag is about roles.
 
-The intended scrape could not be run from the environment this was written in:
-outbound network access is restricted to package registries, so
-`vaingloryfire.com` and both Fandom wikis are unreachable. The names are
-therefore a seed, not a verified roster.
+The intended role scrape could not be run from the environment this was written
+in: outbound network access is restricted to package registries, so
+`vaingloryfire.com` and both Fandom wikis are unreachable. Roles are still
+outstanding.
+
+## Portraits
+
+```
+node scripts/import-portraits.mjs "~/Hero Portraits"
+node scripts/import-portraits.mjs "~/Hero Portraits" --dry-run
+```
+
+Point it at a folder of pictures named after heroes. It matches them by name
+(`sanfeng.png` finds `san-feng`), squares each one to 192px, re-encodes to WebP,
+writes them into `client/public/heroes`, and fills in `image` on every hero it
+matched.
+
+Art exported from somewhere else is never quite ready to ship. The set supplied
+arrived between 120px and 294px, several of them a pixel or two off square, and
+3.7 MB in total — more than anybody on a phone should download to look at a hero
+grid. Squared and re-encoded it comes to 483 KB, about 8.5 KB a hero, and the
+grid loads them lazily on top of that.
+
+The folder is treated as the source of truth: the output directory is emptied
+first, so a portrait dropped from a later set does not linger as a file nothing
+references. Anything in the folder that is not one of our heroes is reported and
+skipped rather than guessed at.
+
+**Eleven portraits came in below 200px** and are stretched slightly to fit —
+anka, churnwalker, grace, inara, kensei, kinetic, lorelai, malene, reza,
+silvernail and yates. They are legible and fine to ship; the script lists them
+on every run, so they can be swapped out if sharper copies turn up.
+
+**Corpus has no portrait.** Its tile is drawn as a name on a plain ground, which
+is what every hero looked like before the art arrived, so it reads as deliberate
+rather than broken. A blank placeholder was supplied alongside the set and is
+not used: an empty picture looks like a failure, a name does not.
 
 ## Filling it in from a vgna.net export
 

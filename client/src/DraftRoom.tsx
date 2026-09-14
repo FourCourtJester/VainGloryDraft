@@ -66,6 +66,7 @@ export function DraftRoom({ roomId, credential, name: playerName, onRejoin }: Pr
   const myTurn = projection.leading && turn !== null && viewer?.role === "player" && turn.team === viewer.team && running;
   const heroesById = new Map(heroData.heroes.map((hero) => [hero.id, hero]));
   const name = (id: string): string => heroesById.get(id)?.name ?? id;
+  const portrait = (id: string): string | null => heroesById.get(id)?.image ?? null;
 
   const remaining = projection.clock === null ? 0 : projection.clock.expiresAt - now;
   const turnRemaining =
@@ -136,7 +137,7 @@ export function DraftRoom({ roomId, credential, name: playerName, onRejoin }: Pr
       )}
 
       <div className="board">
-        <TeamColumn team="A" projection={projection} name={name} />
+        <TeamColumn team="A" projection={projection} name={name} portrait={portrait} />
         <div className="middle">
           {/* A player who is not choosing can still say what they want. Most of
               these teams are not in voice chat, so this is the only way the
@@ -210,7 +211,7 @@ export function DraftRoom({ roomId, credential, name: playerName, onRejoin }: Pr
             </div>
           )}
         </div>
-        <TeamColumn team="B" projection={projection} name={name} />
+        <TeamColumn team="B" projection={projection} name={name} portrait={portrait} />
       </div>
 
       <footer className="room-footer">
@@ -333,10 +334,11 @@ interface ColumnProps {
   readonly team: Team;
   readonly projection: NonNullable<ReturnType<typeof useRoom>["projection"]>;
   readonly name: (id: string) => string;
+  readonly portrait: (id: string) => string | null;
 }
 
 /** One team's side of the board: their picks, in order, and their bans. */
-function TeamColumn({ team, projection, name }: ColumnProps): JSX.Element {
+function TeamColumn({ team, projection, name, portrait }: ColumnProps): JSX.Element {
   const active = projection.turn?.team === team;
   const slots = projection.script
     .filter((turn) => turn.team === team && turn.action === "pick")
@@ -346,12 +348,16 @@ function TeamColumn({ team, projection, name }: ColumnProps): JSX.Element {
   // Mark heroes the clock chose. A hero nobody picked on purpose must never
   // look like one that was, or there is an argument waiting to happen.
   const auto = new Set(projection.committed.filter((entry) => entry.auto).flatMap((entry) => [...entry.heroes]));
-  const label = (id: string): JSX.Element => (
-    <>
-      {name(id)}
-      {auto.has(id) && <span className="auto" title="Chosen by the timer, not the captain">auto</span>}
-    </>
-  );
+  const label = (id: string): JSX.Element => {
+    const face = portrait(id);
+    return (
+      <>
+        {face !== null && <img src={face} alt="" width={26} height={26} loading="lazy" />}
+        {name(id)}
+        {auto.has(id) && <span className="auto" title="Chosen by the timer, not the captain">auto</span>}
+      </>
+    );
+  };
 
   return (
     <section className={`team team-${team}${active ? " active" : ""}`}>

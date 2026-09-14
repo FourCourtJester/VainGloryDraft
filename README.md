@@ -45,6 +45,7 @@ is *derived* from the script. Nothing assumes "five picks a side".
 | `client/` | React + Vite SPA: the create screen and the draft room |
 | `scripts/make-logo.mjs` | Draws the mark and every icon size — see [docs/BRAND.md](docs/BRAND.md) |
 | `scripts/import-heroes.mjs` | Takes a vgna.net export and writes `data/heroes.json` |
+| `scripts/import-portraits.mjs` | Squares, shrinks and self-hosts a folder of hero art |
 
 ```
 npm install
@@ -134,16 +135,18 @@ change either until they do.
 
 ## Waiting on data
 
-`data/heroes.json` carries 58 hero names with `roles: []` and no icons, and is
-marked `verified: false` — the UI will not offer a role filter over data it
-cannot trust. A vgna.net export drops straight in:
+`data/heroes.json` carries 58 hero names and 57 portraits, self-hosted. Roles
+are still `[]` and the file is still marked `verified: false` — the UI will not
+offer a role filter over data it cannot trust. A vgna.net role export drops
+straight in:
 
 ```
-npm run import-heroes -- vgna-heroes.json
+npm run import-heroes -- vgna-heroes.json          # names, roles, icons from JSON
+node scripts/import-portraits.mjs "~/Hero Portraits"  # a folder of pictures
 ```
 
-See [docs/HERO_DATA.md](docs/HERO_DATA.md). Both draft formats are in and
-confirmed; nothing else is blocked.
+See [docs/HERO_DATA.md](docs/HERO_DATA.md). Corpus has no portrait and is drawn
+as a name. Both draft formats are in and confirmed.
 
 ## Where the logic lives
 
@@ -178,9 +181,9 @@ clock chose must never look like one a captain chose.
 
 Things a tournament organiser would hit, in rough order of how much they matter:
 
-- **No hero portraits or roles yet.** Waiting on the vgna.net export; the
-  importer and the UI are both ready for it. The one gap that makes the tool
-  look unfinished.
+- **No hero roles yet.** Portraits have arrived and are in; roles have not, so
+  the pool cannot be filtered by one. Waiting on the vgna.net export, which the
+  importer is ready for.
 - **No list of past drafts.** A draft reopens from its own link, but nothing
   enumerates them, and durable objects cannot be listed — so browsing them needs
   an index written to as drafts finish. It also needs deciding whose history a
