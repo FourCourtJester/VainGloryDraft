@@ -2,11 +2,10 @@
  * Announcements about what just happened in a draft: something chosen, a new
  * turn on the clock, a finished draft.
  *
- * This is how anything else in the world finds out about a draft without
- * needing to understand how drafting works. A panel showing statistics for a
- * hero the moment it is picked, a scoreboard for a stream, a message posted to
- * a tournament's chat — each of those listens here, and none of them requires
- * the draft rules to be touched.
+ * These go out to everybody in the room with each update, which is how a
+ * screen — or anything else connected to the room, such as an overlay for a
+ * stream — hears what just happened without needing to understand how
+ * drafting works or compare two states itself.
  *
  * Only confirmed actions are announced. A captain hovering over something, or
  * choosing it and changing their mind, is nobody else's business — and neither
@@ -65,51 +64,4 @@ export function diffEvents(prev: DraftState, next: DraftState): readonly DraftEv
   }
 
   return events;
-}
-
-export type DraftEventHandler = (event: DraftEvent) => void;
-
-/**
- * Keeps the list of things listening for draft announcements and passes each one
- * along.
- *
- * A listener that breaks is not allowed to disturb the draft — an outside site
- * being slow or down should never be the reason a tournament stops.
- */
-export class DraftEventBus {
-  #handlers = new Set<DraftEventHandler>();
-  #onError: (error: unknown, event: DraftEvent) => void;
-
-  constructor(onError: (error: unknown, event: DraftEvent) => void = () => {}) {
-    this.#onError = onError;
-  }
-
-  subscribe(handler: DraftEventHandler): () => void {
-    this.#handlers.add(handler);
-    return () => this.#handlers.delete(handler);
-  }
-
-  /** Listen for just one kind of announcement, such as choices but not turn changes. */
-  on<T extends DraftEventType>(type: T, handler: (event: Extract<DraftEvent, { type: T }>) => void): () => void {
-    return this.subscribe((event) => {
-      if (event.type === type) handler(event as Extract<DraftEvent, { type: T }>);
-    });
-  }
-
-  publish(events: readonly DraftEvent[]): void {
-    for (const event of events) {
-      for (const handler of [...this.#handlers]) {
-        try {
-          handler(event);
-        } catch (error) {
-          // A broken listener is reported and then ignored; the draft carries on.
-          this.#onError(error, event);
-        }
-      }
-    }
-  }
-
-  get size(): number {
-    return this.#handlers.size;
-  }
 }

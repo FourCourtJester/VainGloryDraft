@@ -51,7 +51,7 @@ covered the moment it is added.
       "name": "Best of 3 veto",
       "official": false,                        // true only once confirmed as really played
       "script": "A ban, B ban, A pick, B pick, A ban, B ban, remaining pick",
-      "teamSize": 1,                            // optional: players a side waits for
+      "teamSize": 1,                            // optional: squad size, when squads join
       "teams": [ … ],                           // optional: this format's own teams
       "notes": "…"
     }
@@ -71,9 +71,9 @@ four distinctly and handle more. A format can bring its own list — a three-way
 draft inside a game that is usually two-sided — and a room can be made with
 other team names without touching the pack.
 
-**`teamSize`** is how many players a side waits for before the ready check. Left
-out, it is however many things a team takes: five for a 5v5 hero draft. A map
-veto is run by two captains, so it says 1.
+**`teamSize`** is how many players a side waits for when a room asks for whole
+squads — rooms are captains only unless they do. Left out, it is however many
+things a team takes: five for a 5v5 hero draft.
 
 ### `catalog.json`
 

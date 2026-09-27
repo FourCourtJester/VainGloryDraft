@@ -44,23 +44,11 @@ also shows what has actually been used.
 
 ## Before it is public
 
-Anyone who finds the address can start a draft, and that is the intent — but a
-script could otherwise spend the whole day's allowance in a few seconds, so
-every address is held to five rooms in a burst, one back every twenty seconds,
-and a hundred a day. Over that, room-making answers `429` and the site carries
-on working normally for everybody else.
-
-A tournament bot needs more than that, so give it a key to skip the limit with:
-
-```
-npx wrangler secret put ROOM_CREATE_SECRET
-```
-
-The bot then sends it as an `x-api-key` header. Nobody types it and no player
-ever sees it, so make it long and boring.
-
-To close the site off entirely — no public drafts at all, only the bot's — set
-`ROOM_CREATE_PRIVATE = "true"` alongside it. Most deployments should not.
+Anyone who finds the address can start a draft, and that is the intent. The app
+does no rate limiting of its own. If somebody ever scripts at it, add a
+rate-limiting rule for `POST /api/rooms` in the Cloudflare dashboard (Security →
+WAF → Rate limiting rules); the free plan includes one, and it needs no code or
+redeploy.
 
 ## Rooms clear themselves out
 

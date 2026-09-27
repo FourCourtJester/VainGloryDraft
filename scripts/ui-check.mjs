@@ -23,11 +23,6 @@ function check(label, ok, detail = "") {
   if (!ok) failures++;
   console.log(`${ok ? "ok  " : "FAIL"}  ${label}${ok || detail === "" ? "" : `  — ${detail}`}`);
 }
-// Rooms this script makes over the API come from made-up addresses, so they do
-// not spend the allowance this machine's own browser is held to when it makes
-// one through the page. Locally the worker believes whatever address it is
-// told; behind Cloudflare the header cannot be forged.
-const testAddress = () => `198.51.100.${1 + Math.floor(Math.random() * 250)}`;
 const shot = async (page, name) => (SHOTS === null ? undefined : page.screenshot({ path: `${SHOTS}/${name}.png` }));
 
 const browser = await chromium.launch(
@@ -45,11 +40,12 @@ await organiser.waitForSelector("select");
 const offered = await organiser.locator("select option").allTextContents();
 check("offers every game", offered.includes("Vainglory") && offered.includes("Counter-Strike 2"), offered.join(" | "));
 check("and the 5v5 standard first", offered.some((text) => text.startsWith("5v5 Standard")), offered.join(" | "));
-// A short clock so the alarm can be watched without a long wait. This check is
-// about drafting rather than the lobby, so one player a side.
-await organiser.fill('input[type="number"] >> nth=0', "1"); // players per side
-await organiser.fill('input[type="number"] >> nth=1', "8"); // seconds per turn
-await organiser.fill('input[type="number"] >> nth=2', "4"); // reserve
+// A short clock so the alarm can be watched without a long wait. Captains only
+// is the default, which is what this part is about.
+check("defaults to captains only", (await organiser.locator("select >> nth=2").inputValue()) === "captains");
+check("and asks for no squad size until squads are chosen", (await organiser.locator('input[type="number"]').count()) === 2);
+await organiser.fill('input[type="number"] >> nth=0', "8"); // seconds per turn
+await organiser.fill('input[type="number"] >> nth=1', "4"); // reserve
 await organiser.click("button.confirm");
 await organiser.waitForSelector(".links code");
 const [captainA, captainB, spectatorLink] = await organiser.locator(".links code").allTextContents();
@@ -189,8 +185,8 @@ check("without shutting out spectators", watching.status === 200);
 const pairRoom = await (
   await fetch(`${BASE}/api/rooms`, {
     method: "POST",
-    headers: { "content-type": "application/json", "cf-connecting-ip": testAddress() },
-    body: JSON.stringify({ game: "vainglory", script: "Apick, Bpick x2", teamSize: 1, perTurnMs: 120_000 }),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ game: "vainglory", script: "Apick, Bpick x2", perTurnMs: 120_000 }),
   })
 ).json();
 
@@ -240,8 +236,8 @@ for (const page of [pairA, pairB]) await page.close();
 const squadRoom = await (
   await fetch(`${BASE}/api/rooms`, {
     method: "POST",
-    headers: { "content-type": "application/json", "cf-connecting-ip": testAddress() },
-    body: JSON.stringify({ game: "vainglory", preset: "vg-3v3-standard", perTurnMs: 60_000 }),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ game: "vainglory", preset: "vg-3v3-standard", joining: "squads", perTurnMs: 60_000 }),
   })
 ).json();
 
@@ -327,8 +323,8 @@ check("marking never moves the draft on", (await ash.locator(".turn-label").text
 const shortRoom = await (
   await fetch(`${BASE}/api/rooms`, {
     method: "POST",
-    headers: { "content-type": "application/json", "cf-connecting-ip": testAddress() },
-    body: JSON.stringify({ game: "vainglory", preset: "vg-3v3-standard", perTurnMs: 60_000, teamSize: 3 }),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ game: "vainglory", preset: "vg-3v3-standard", joining: "squads", perTurnMs: 60_000, teamSize: 3 }),
   })
 ).json();
 
@@ -365,7 +361,7 @@ check("both leaders agreeing begins it short-handed", (await first.page.locator(
 const vetoRoom = await (
   await fetch(`${BASE}/api/rooms`, {
     method: "POST",
-    headers: { "content-type": "application/json", "cf-connecting-ip": testAddress() },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ game: "cs2", script: "A+B ban, A pick, B pick, remaining pick", perTurnMs: 120_000 }),
   })
 ).json();

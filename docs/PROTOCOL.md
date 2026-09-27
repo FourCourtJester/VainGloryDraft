@@ -22,8 +22,10 @@ connect over a WebSocket and are told what they are allowed to see.
   "script": "A ban, B ban, A pick x2",  // …or an order written out, which wins
   "teams": [{ "id": "A", "name": "Liquid" }, { "id": "B", "name": "FaZe" }],
   "pool": ["ozo", "krul", "…"],         // a part of the catalog, if not all of it
-  "mirror": false, "autoFill": "random", "perTurnMs": 30000, "bankMs": 60000,
-  "teamSize": 5, "callbackUrl": "https://bot.example/draft-finished" }
+  "mirror": false, "perTurnMs": 30000, "bankMs": 60000,
+  "joining": "captains",                // or "squads"
+  "readyCheck": true,
+  "teamSize": 5 }                       // squads only
 ```
 
 `script` is the notation in [GAMES.md](GAMES.md) and wins over `preset`. With
@@ -37,8 +39,7 @@ itself.
 
 Room options are validated before they reach the engine: `perTurnMs` and `bankMs`
 must be finite numbers inside sane bounds, an order must parse and fit the pool,
-a pool may only name things in the game's catalog, and an unknown `autoFill`
-falls back to `random` rather than being stored. Anything wrong comes back as a
+and a pool may only name things in the game's catalog. Anything wrong comes back as a
 `400` saying what.
 
 ## Identity
@@ -71,25 +72,10 @@ gets in clears the count, so their own typos cost the next person nothing.
 
 ## Creating rooms from a bot
 
-Anybody who finds the site can start a draft — that is the intent, and a bot is
-simply another caller. What the bot gets is a fast lane past the limit everyone
-else keeps to:
-
-- `ROOM_CREATE_SECRET`, sent as `x-api-key`, marks a caller as trusted. Trusted
-  callers make as many rooms as they like. Left unset, everybody is treated the
-  same.
-- Everybody else gets **five rooms in a burst, one back every twenty seconds,
-  and a hundred a day**, counted per address. Over that, `POST /api/rooms`
-  answers `429` with a `retry-after` header and a `retryAfter` in seconds.
-- `ROOM_CREATE_PRIVATE="true"` shuts room-making to everybody but the key, for a
-  deployment that is nobody's business but its owner's. Most deployments should
-  leave it alone.
-
-`POST /api/rooms` also takes `callbackUrl` (https only). When the draft finishes,
-the room POSTs the same body as `GET /record` to that address, once — a bot
-posting the result to a channel should not post it twice because a spectator
-reloaded. A bot that is down when it fires misses nothing: the record can still
-be fetched whenever it comes back.
+Anybody who finds the site can start a draft, and a bot is simply another
+caller: it posts to `/api/rooms` like the create screen does. Nothing is rate
+limited in the app itself; if the site ever needs protecting, Cloudflare's own
+rate-limiting rule does it without code.
 
 The response carries the codes on their own as well as inside the links, so a bot
 can either paste a link or read a code out:
@@ -161,7 +147,7 @@ though — a room clears itself out on its own, at one of two points:
 - **Six hours after a room was made, if nobody ever played in it.** A link made
   and never used is rubbish rather than history. The six hours run from the last
   time anybody was seen in the room, not from when the link was made, so a room
-  set up well in advance of a match — with a squad sitting in it waiting — is
+  set up well in advance of a match — with people sitting in it waiting — is
   never swept out from under them.
 
 A room that has cleared itself out is gone for good: its links stop working and
@@ -242,17 +228,25 @@ off the list, since it is noise at the moment there is least time for it.
 
 `lobby → drafting → complete`
 
-A room sits in `lobby`, clock stopped, until **every player is present and has
-said they are ready**. Every side being full is not enough on its own: ten people
-staring at a loading screen is exactly when somebody is still finding their
-headset. Time spent waiting costs nobody anything, and readiness can be taken
-back. Draft commands in the lobby are refused with `not_started`. `complete`
-stops the clock and clears the alarm.
+A room sits in `lobby`, clock stopped, until everybody it waits for is present
+and — with the ready check on, which is the default — has said they are ready.
+Being present is not enough on its own: two people staring at a loading screen
+is exactly when somebody is still finding their headset. Time spent waiting
+costs nobody anything, and readiness can be taken back. With the ready check
+off, the draft begins the moment the last of them arrives. Draft commands in
+the lobby are refused with `not_started`. `complete` stops the clock and clears
+the alarm.
 
-How many players a side waits for comes from the format — a draft where each
-team picks five heroes is played by five people, a map veto by one captain each
-— and `teamSize` on room creation overrides it. Set it to 1 for a draft where
-only the captains turn up.
+Who a room waits for is its `joining` setting:
+
+- **`captains`**, the default: one person a side. Anybody else who opens a
+  team's link is a stand-in — they can take over if the captain drops — and
+  nobody waits for them or their readiness.
+- **`squads`**: the whole team joins, so teammates can watch their own side
+  choose and tell their captain what they want. The room waits for `teamSize`
+  players a side, which defaults to the format's own figure — five for a 5v5
+  hero draft. Sending `teamSize` without `joining: "squads"` is refused rather
+  than quietly ignored.
 
 ## The clock
 

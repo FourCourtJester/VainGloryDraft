@@ -79,15 +79,6 @@ export interface Turn {
 export type TurnScript = readonly Turn[];
 
 /**
- * How the engine chooses for a team that ran out of time, and for a turn
- * nobody plays.
- *
- * "random" draws from whatever is still legal; "lowestIndex" takes the first
- * available item on the list.
- */
-export type AutoFillStrategy = "random" | "lowestIndex";
-
-/**
  * The rules of one particular draft, settled the moment the room is made and
  * never changed after.
  *
@@ -104,11 +95,11 @@ export interface DraftConfig {
   readonly pool: readonly string[];
   /** Whether more than one team may take the same thing. Off unless the room asks for it. */
   readonly mirror: boolean;
-  readonly autoFill: AutoFillStrategy;
   /**
    * A private number belonging to this room, used to make the choices the
-   * engine makes on a team's behalf repeatable. Anyone reviewing the room
-   * afterwards can check that the draft played out the way it says it did.
+   * engine makes on a team's behalf — at random, from whatever is still legal
+   * — repeatable. Anyone reviewing the room afterwards can check that the
+   * draft played out the way it says it did.
    */
   readonly seed: string;
 }

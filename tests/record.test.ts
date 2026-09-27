@@ -14,7 +14,6 @@ function start(order = "Aban, Bban, Apick, Bpick x2"): DraftState {
       script: script(order),
       pool: ["a", "b", "c", "d", "e", "f"],
       mirror: false,
-      autoFill: "lowestIndex",
       seed: "seed",
     }),
   );

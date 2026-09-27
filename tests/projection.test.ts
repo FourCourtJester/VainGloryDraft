@@ -11,7 +11,6 @@ const CONFIG: DraftConfig = {
   script: script("Aban, Bpick x2, Apick"),
   pool: ["a", "b", "c", "d", "e"],
   mirror: false,
-  autoFill: "lowestIndex",
   seed: "s",
 };
 
@@ -27,6 +26,8 @@ function lobbyFor(viewer: Viewer) {
     you: viewer.role === "player" && viewer.memberId === id,
   });
   return {
+    joining: "captains" as const,
+    readyCheck: true,
     teamSize: 1,
     members: [member("a1", "A"), member("b1", "B")],
     everyoneHere: true,

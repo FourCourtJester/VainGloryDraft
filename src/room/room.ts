@@ -27,7 +27,6 @@ import type { TimerRules, TimerState } from "../timer.js";
 import type {
   ActionDefinition,
   ActionId,
-  AutoFillStrategy,
   DraftState,
   Team,
   TeamDefinition,
@@ -96,6 +95,17 @@ export const DEFAULT_TIMER_RULES: TimerRules = { perTurnMs: 30_000, bankMs: 60_0
  * never loads a game's pack itself, which is what keeps it able to run any of
  * them.
  */
+/**
+ * Who a room waits for.
+ *
+ * - `captains`: one person a side, the one who chooses. The usual case, and the
+ *   default. Anybody else who opens a team's link is a stand-in who can take
+ *   over if the captain drops, and nobody waits for them.
+ * - `squads`: the whole team joins, so teammates can see the draft from their
+ *   side and tell their captain what they want. The room waits for all of them.
+ */
+export type JoinMode = "captains" | "squads";
+
 export interface CreateRoomOptions {
   /** Which game's pack the screens should draw the pool from. The room only passes it on. */
   readonly game: string;
@@ -104,12 +114,18 @@ export interface CreateRoomOptions {
   readonly script: TurnScript;
   readonly pool: readonly string[];
   readonly mirror?: boolean;
-  readonly autoFill?: AutoFillStrategy;
   readonly rules?: TimerRules;
   readonly roomId?: string;
   readonly seed?: string;
-  readonly callbackUrl?: string | null;
-  /** How many players a side has. Worked out from the format unless given. */
+  /** Captains only unless a room asks for whole squads. */
+  readonly joining?: JoinMode;
+  /**
+   * Whether everybody the room waits for has to say they are ready before the
+   * clock starts. On unless a room turns it off, in which case the draft begins
+   * the moment the last of them arrives.
+   */
+  readonly readyCheck?: boolean;
+  /** How many players a side has, when whole squads join. Worked out from the format unless given. */
   readonly teamSize?: number;
   /** How long a finished draft is kept. Defaults to a month. */
   readonly retentionMs?: number;
@@ -127,6 +143,8 @@ export interface RoomSnapshot {
   readonly roomId: string;
   readonly game: string;
   readonly createdAt: number;
+  readonly joining: JoinMode;
+  readonly readyCheck: boolean;
   readonly phase: RoomPhase;
   readonly draft: DraftState;
   readonly timer: TimerState;
@@ -152,10 +170,6 @@ export interface RoomSnapshot {
   readonly completedAt: number | null;
   readonly retentionMs: number;
   readonly abandonAfterMs: number;
-  /** Where to report the finished draft, if whoever made the room asked for that. */
-  readonly callbackUrl: string | null;
-  /** Set once the finished draft has been reported, so it is not sent twice. */
-  readonly reported: boolean;
 }
 
 export interface RoomOutcome {
@@ -204,7 +218,6 @@ export class Room {
         pool: options.pool,
         seed: options.seed ?? generateToken(12),
         mirror: options.mirror,
-        autoFill: options.autoFill,
       }),
     );
     if (!draft.ok) throw new Error(`Cannot create room: ${draft.error.message}`);
@@ -217,25 +230,27 @@ export class Room {
 
     const rules = options.rules ?? DEFAULT_TIMER_RULES;
     const { script, actions } = draft.value.config;
+    const joining = options.joining ?? "captains";
+    const teamSize = joining === "captains" ? 1 : (options.teamSize ?? playersPerTeam(script, actions));
     return {
       version: 2,
       roomId: options.roomId ?? generateToken(8),
       game: options.game,
       createdAt: now,
+      joining,
+      readyCheck: options.readyCheck ?? true,
       phase: "lobby",
       draft: draft.value,
       timer: startTimer(rules, teams, now),
       rules,
       credentials,
       failures: { count: 0, since: now },
-      roster: emptyRoster(teams, options.teamSize ?? playersPerTeam(script, actions)),
+      roster: emptyRoster(teams, teamSize),
       startAnyway: Object.fromEntries(teams.map((team) => [team, false])),
       suggestions: [],
       completedAt: null,
       retentionMs: options.retentionMs ?? RETAIN_AFTER_COMPLETE_MS,
       abandonAfterMs: options.abandonAfterMs ?? ABANDON_AFTER_MS,
-      callbackUrl: options.callbackUrl ?? null,
-      reported: false,
     };
   }
 
@@ -278,16 +293,30 @@ export class Room {
   }
 
   /**
-   * Whether the draft may begin: either everybody is here and ready, or every
-   * side's leader has agreed to start without them. Either way every side
-   * needs somebody to do the choosing.
+   * Whether the draft may begin: either everybody the room waits for is here
+   * (and ready, if the room checks), or every side's leader has agreed to start
+   * without the rest. Either way every side needs somebody to do the choosing.
    */
   canBegin(): boolean {
-    const { roster, startAnyway } = this.#snapshot;
+    const { roster, startAnyway, readyCheck } = this.#snapshot;
     const teams = this.#teams();
     if (!teams.every((team) => typeof roster.leaders[team] === "string")) return false;
-    if (everyoneReady(roster)) return true;
+    if (readyCheck ? this.#everyoneReady() : everyoneHere(roster)) return true;
     return teams.every((team) => startAnyway[team] === true);
+  }
+
+  /**
+   * Whether everybody the room waits for has said they are ready. With
+   * captains only, that is the captains: a stand-in on a second device is not
+   * somebody the draft should wait on.
+   */
+  #everyoneReady(): boolean {
+    const { roster, joining } = this.#snapshot;
+    if (joining === "squads") return everyoneReady(roster);
+    return this.#teams().every((team) => {
+      const leader = roster.leaders[team];
+      return typeof leader === "string" && findMember(roster, leader)?.ready === true;
+    });
   }
 
   /** The teams in this room, in the order the format defines them. */
@@ -342,16 +371,6 @@ export class Room {
       ...this.#snapshot,
       failures: fresh ? { count: 1, since: now } : { count: count + 1, since },
     };
-  }
-
-  /** The finished draft still needs reporting to whoever asked for it. */
-  get pendingReport(): string | null {
-    const { callbackUrl, reported, phase } = this.#snapshot;
-    return phase === "complete" && !reported && callbackUrl !== null ? callbackUrl : null;
-  }
-
-  markReported(): void {
-    this.#snapshot = { ...this.#snapshot, reported: true };
   }
 
   /**
@@ -425,10 +444,12 @@ export class Room {
       you: member.id === forMemberId,
     }));
     return {
+      joining: this.#snapshot.joining,
+      readyCheck: this.#snapshot.readyCheck,
       teamSize: roster.teamSize,
       members,
       everyoneHere: everyoneHere(roster),
-      everyoneReady: everyoneReady(roster),
+      everyoneReady: this.#everyoneReady(),
       startAnyway: this.#snapshot.startAnyway,
     };
   }

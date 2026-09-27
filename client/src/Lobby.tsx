@@ -12,8 +12,9 @@ interface Props {
 }
 
 /**
- * The room before the draft: every squad arriving, saying they are ready, and
- * settling who is going to do the choosing.
+ * The room before the draft: the captains — or whole squads, if the room asked
+ * for them — arriving, saying they are ready, and settling who does the
+ * choosing.
  *
  * Nothing here costs anybody time. The clock does not start until the last
  * person has said they are ready, so a team still finding their headsets is not
@@ -26,15 +27,18 @@ export function Lobby({ projection, onReady, onHandOver, onClaimLead, onStartAny
   const agreed = lobby.startAnyway;
   const others = you === undefined ? [] : projection.teams.filter((team) => team.id !== you.team);
   const othersAgreed = others.length > 0 && others.every((team) => agreed[team.id] === true);
+  const squads = lobby.joining === "squads";
+  const expected = lobby.teamSize * projection.teams.length;
+  const who = squads ? "players" : "captains";
 
   return (
     <section className="lobby">
       <div className="lobby-head">
-        <h2>{lobby.everyoneHere ? "Ready check" : "Waiting for players"}</h2>
+        <h2>{lobby.everyoneHere && lobby.readyCheck ? "Ready check" : `Waiting for ${who}`}</h2>
         <span className="note">
-          {lobby.everyoneHere
+          {lobby.everyoneHere && lobby.readyCheck
             ? `${waitingFor} still to confirm`
-            : `${lobby.members.length} of ${lobby.teamSize * projection.teams.length} here`}
+            : `${Math.min(lobby.members.length, expected)} of ${expected} here`}
         </span>
       </div>
 
@@ -51,7 +55,7 @@ export function Lobby({ projection, onReady, onHandOver, onClaimLead, onStartAny
         ))}
       </div>
 
-      {you !== undefined && (
+      {you !== undefined && lobby.readyCheck && (
         <div className="ready-bar">
           <button
             type="button"
@@ -65,11 +69,14 @@ export function Lobby({ projection, onReady, onHandOver, onClaimLead, onStartAny
           </span>
         </div>
       )}
+      {!lobby.readyCheck && (
+        <p className="note">The draft begins the moment the last of the {who} arrives.</p>
+      )}
 
       {/* A no-show should not be able to cancel a match, so the leaders can
           agree to begin without a full room. It takes all of them, so no side
           can start on another. */}
-      {you?.leader === true && !lobby.everyoneHere && others.length > 0 && (
+      {squads && you?.leader === true && !lobby.everyoneHere && others.length > 0 && (
         <div className="start-anyway">
           <button
             type="button"

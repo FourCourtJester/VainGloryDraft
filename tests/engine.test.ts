@@ -27,7 +27,6 @@ function config(overrides: Partial<DraftConfig> = {}): DraftConfig {
     script: script("Aban, Bban, Apick, Bpick x2, Apick"),
     pool: POOL,
     mirror: false,
-    autoFill: "random",
     seed: "seed-1",
     ...overrides,
   };
@@ -224,13 +223,12 @@ describe("legality", () => {
     let state = start({
       script: script("Apick, Bpick, Apick, Bpick"),
       mirror: true,
-      autoFill: "lowestIndex",
       pool: ["a", "b", "c"],
     });
     state = play(state, "a");
     state = play(state, "a");
     state = play(state, "b");
-    expect(autoFillSelection(state, "B")).toEqual(["b"]);
+    expect(autoFillSelection(state, "B")).not.toContain("a");
   });
 
   it("rejects something outside the pool", () => {
@@ -282,16 +280,9 @@ describe("timeout", () => {
     expect(draws.size).toBeGreaterThan(1);
   });
 
-  it("takes the lowest-index legal item under the lowestIndex strategy", () => {
-    let state = start({ autoFill: "lowestIndex" });
-    state = must(resolveTimeout(state)); // A bans "a"
-    expect(state.committed[0]?.items).toEqual(["a"]);
-    state = must(resolveTimeout(state)); // B bans the next available
-    expect(state.committed[1]?.items).toEqual(["b"]);
-  });
-
   it("never auto-fills something illegal", () => {
-    let state = start({ script: script("Aban, Bpick, Apick"), autoFill: "lowestIndex" });
+    // Three in the pool, two gone: the draw has exactly one legal choice.
+    let state = start({ script: script("Aban, Bpick, Apick"), pool: ["a", "b", "c"] });
     state = play(state, "a");
     state = play(state, "b");
     state = must(resolveTimeout(state));
@@ -301,10 +292,12 @@ describe("timeout", () => {
   it("drops staged items that became illegal before resolving", () => {
     // Contrived but possible if legality changes under a captain: staged entries
     // are filtered, not trusted.
-    let state = start({ script: script("Apick, Bpick"), autoFill: "lowestIndex" });
+    let state = start({ script: script("Apick, Bpick") });
     state = play(state, "a");
     const tampered: DraftState = { ...state, staged: { B: ["a"] } };
-    expect(autoFillSelection(tampered, "B")).toEqual(["b"]);
+    const filled = autoFillSelection(tampered, "B");
+    expect(filled).toHaveLength(1);
+    expect(filled).not.toContain("a");
   });
 
   it("can resolve every turn of a draft nobody plays", () => {
@@ -319,7 +312,7 @@ describe("timeout", () => {
 });
 
 describe("turns several teams play at once", () => {
-  const blind = (): DraftState => start({ script: script("A+B ban, Apick, Bpick"), autoFill: "lowestIndex" });
+  const blind = (): DraftState => start({ script: script("A+B ban, Apick, Bpick") });
 
   it("waits for every team before revealing anything", () => {
     let state = blind();
@@ -362,10 +355,9 @@ describe("turns several teams play at once", () => {
     let state = blind();
     state = playAs(state, "A", "e");
     state = must(resolveTimeout(state, 5, ["B"]));
-    expect(state.committed).toEqual([
-      { index: 0, team: "A", action: "ban", items: ["e"], auto: false, at: null },
-      { index: 0, team: "B", action: "ban", items: ["a"], auto: true, at: 5 },
-    ]);
+    expect(state.committed[0]).toEqual({ index: 0, team: "A", action: "ban", items: ["e"], auto: false, at: null });
+    expect(state.committed[1]).toMatchObject({ index: 0, team: "B", action: "ban", auto: true, at: 5 });
+    expect(state.committed[1]?.items).toHaveLength(1);
   });
 
   it("gives each team its own dice, so one side's timeout says nothing about the other's", () => {
@@ -404,8 +396,11 @@ describe("turns nobody plays", () => {
   });
 
   it("is settled before anybody arrives when a format opens with one", () => {
-    const state = start({ script: script("remaining ban, Apick"), autoFill: "lowestIndex" });
-    expect(state.committed).toEqual([{ index: 0, team: null, action: "ban", items: ["a"], auto: true, at: null }]);
+    const state = start({ script: script("remaining ban, Apick") });
+    expect(state.committed).toEqual([
+      { index: 0, team: null, action: "ban", items: state.committed[0]!.items, auto: true, at: null },
+    ]);
+    expect(state.committed[0]!.items).toHaveLength(1);
     expect(currentTurn(state)).toEqual({ teams: ["A"], action: "pick", count: 1 });
   });
 });

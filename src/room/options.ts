@@ -7,7 +7,6 @@
  * plays against, with no way back.
  */
 
-import type { AutoFillStrategy } from "../types.js";
 import { TURN_TIME_BOUNDS } from "../script.js";
 import type { TimerRules } from "../timer.js";
 import { DEFAULT_TIMER_RULES } from "./room.js";
@@ -19,10 +18,6 @@ export const BANK_BOUNDS = { minMs: 0, maxMs: 24 * 60 * 60_000 };
 export interface OptionProblem {
   readonly field: string;
   readonly message: string;
-}
-
-export function parseAutoFill(value: unknown): AutoFillStrategy | undefined {
-  return value === "random" || value === "lowestIndex" ? value : undefined;
 }
 
 export function parseTimerRules(

@@ -10,8 +10,8 @@ staged multi-pick case. Seeded random cannot be played for; lowest-index would
 let a captain who wants the first legal hero simply stall until the clock hands
 it to them. Determinism comes from the seed, not from predictability: the room
 seed plus the turn index reproduce any auto-action exactly, so a disputed pick
-can be replayed from the log. Implemented as `DRAFT_DEFAULTS.autoFill` in
-`src/config.ts`; `lowestIndex` stays available per room.
+can be replayed from the log. It is the only strategy: taking the first legal
+option was available per room once, and was cut because nobody should want it.
 
 Determinism here is not the same as predictability, and the distinction is the
 whole point: the room seed never leaves the server, so a draw can be replayed
@@ -58,20 +58,12 @@ waiting to happen. The room's own alarm — already there to run the turn clock 
 does the sweeping, so this costs no extra machinery. Both windows are settable
 per room at creation.
 
-**Public room creation stays open, and an allowance protects it.** Anybody who
-finds the site can start a draft; the org's bot is simply a caller that holds a
-key. A shared secret was the wrong tool, because it can only answer "yes" or
-"no" to a whole audience — so it now marks a caller as trusted rather than
-gating the door, and everybody else is held to five rooms in a burst, one back
-every twenty seconds, and a hundred a day, counted per address by a durable
-object of its own. `ROOM_CREATE_PRIVATE` still shuts the door completely for
-anyone who wants a deployment of their own.
-
-The count is written down rather than merely held in memory. An object that has
-gone quiet gets put away, and a script pacing itself around that would have been
-handed a fresh allowance every time — which is exactly the case the daily
-ceiling exists for. What is written down deletes itself a day later, on the same
-principle as the rooms.
+**Public room creation stays open, with nothing in front of it.** Anybody who
+finds the site can start a draft, and a bot is simply another caller. A per-address
+allowance, a bot key, a private mode and a finished-draft webhook were all
+built and then cut as more machinery than the tool needs: should the site ever
+be scripted at, Cloudflare's own rate-limiting rule covers it without code, and
+a bot can fetch a finished draft's record whenever it likes.
 
 **A double pick is one turn, on one clock.** Where the snake gives a team two
 picks in a row, they stage both heroes and lock them in together, rather than
@@ -149,6 +141,19 @@ get colours of their own.
 snapshot of the rules it was made with, and the shape of those rules changed.
 Nothing had been deployed, so there were none to carry; a room from an older
 shape now answers "no such room" rather than being run wrongly.
+
+**Captains only, unless a room asks for whole squads.** Most drafts are run by
+one captain a side, so that is the default: the room waits for them and nobody
+else. Anybody else opening a team's link is a stand-in who can take over if the
+captain drops, and does not hold up the start. Whole squads — everybody joins,
+teammates watch their side choose and tell their captain what they want — is an
+option per room, since it is worth having and not worth making everybody wait
+for.
+
+**The ready check is its own switch, and on by default.** Being connected is not
+the same as being ready, for two captains as much as for ten players, so the
+clock waits for everybody to say so. A room can turn it off and begin the moment
+the last person arrives.
 
 ## Still open
 - Whether a double-pick turn gets more time on the clock than a single pick.

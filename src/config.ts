@@ -6,25 +6,23 @@
  * assumed separately everywhere a room is made.
  */
 
-import type { ActionDefinition, AutoFillStrategy, DraftConfig, TeamDefinition, TurnScript } from "./types.js";
+import type { ActionDefinition, DraftConfig, TeamDefinition, TurnScript } from "./types.js";
 
 export interface DraftDefaults {
   readonly mirror: boolean;
-  readonly autoFill: AutoFillStrategy;
 }
 
 /**
  * Teams may not take the same thing, which is the usual tournament rule; a room
  * can allow it if it wants to.
  *
- * When a team runs out of time the engine chooses for them at random. Always
- * taking the first thing on the list would be easy to plan around — a captain
- * who wanted it could simply let the clock run — whereas a random choice is
- * nothing worth waiting for.
+ * When a team runs out of time the engine always chooses for them at random.
+ * Taking the first thing on the list instead would be easy to plan around — a
+ * captain who wanted it could simply let the clock run — whereas a random
+ * choice is nothing worth waiting for.
  */
 export const DRAFT_DEFAULTS: DraftDefaults = {
   mirror: false,
-  autoFill: "random",
 };
 
 export interface RoomOptions {
@@ -40,7 +38,6 @@ export interface RoomOptions {
    */
   readonly seed: string;
   readonly mirror?: boolean | undefined;
-  readonly autoFill?: AutoFillStrategy | undefined;
 }
 
 /** Fills in whatever the organiser did not choose, and hands back a full set of rules. */
@@ -52,6 +49,5 @@ export function draftConfig(options: RoomOptions): DraftConfig {
     pool: options.pool,
     seed: options.seed,
     mirror: options.mirror ?? DRAFT_DEFAULTS.mirror,
-    autoFill: options.autoFill ?? DRAFT_DEFAULTS.autoFill,
   };
 }

@@ -63,6 +63,10 @@ export interface MemberView {
 }
 
 export interface LobbyView {
+  /** Whether the room waits for captains only or whole squads. */
+  readonly joining: "captains" | "squads";
+  /** Whether everybody has to say they are ready before the clock starts. */
+  readonly readyCheck: boolean;
   readonly teamSize: number;
   readonly members: readonly MemberView[];
   readonly everyoneHere: boolean;

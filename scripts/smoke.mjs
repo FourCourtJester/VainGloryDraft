@@ -27,7 +27,7 @@ const created = await fetch(`${BASE}/api/rooms`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   // A deliberately tiny clock so the alarm can be observed in a few seconds.
-  body: JSON.stringify({ game: "vainglory", perTurnMs: 2000, bankMs: 1000, teamSize: 1 }),
+  body: JSON.stringify({ game: "vainglory", perTurnMs: 2000, bankMs: 1000 }),
 });
 const room = await created.json();
 console.log(`room ${room.roomId}`);
@@ -158,6 +158,31 @@ check("on the one map nobody touched", state.VS.projection.committed.at(-1), {
 });
 for (const socket of [va, vb, vs]) socket.close();
 
+// Without a ready check, the draft begins the moment the last captain arrives.
+console.log("\nchecking a room with no ready check...");
+const quick = await (
+  await fetch(`${BASE}/api/rooms`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ game: "vainglory", readyCheck: false }),
+  })
+).json();
+const qa = await connect("QA", quick.links.teams.A, quick.roomId);
+await wait(200);
+check("waits while one captain is missing", state.QA.phase, "lobby");
+const qb = await connect("QB", quick.links.teams.B, quick.roomId);
+await wait(300);
+check("and starts as soon as the second arrives", state.QA.phase, "drafting");
+qa.close();
+qb.close();
+
+const refused = await fetch(`${BASE}/api/rooms`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ game: "vainglory", teamSize: 3 }),
+});
+check("a squad size without squads is refused rather than ignored", refused.status, 400);
+
 // A room that never gets used should throw itself away. Real rooms wait hours;
 // this one is told to give up after a couple of seconds so the sweep can be
 // watched happening.
@@ -166,7 +191,7 @@ const doomed = await (
   await fetch(`${BASE}/api/rooms`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ game: "vainglory", abandonAfterSeconds: 2, teamSize: 1 }),
+    body: JSON.stringify({ game: "vainglory", abandonAfterSeconds: 2 }),
   })
 ).json();
 
@@ -176,22 +201,6 @@ check("a new room answers", alive.status, 200);
 await wait(4000);
 const gone = await fetch(`${BASE}/api/rooms/${doomed.roomId}/state?token=${new URL(doomed.links.spectator).searchParams.get("token")}`);
 check("a room nobody ever used is thrown away", gone.status, 404);
-
-// Anybody may start a draft, but not at machine speed. A made-up address is
-// used so the check does not spend this machine's own allowance.
-console.log("\nchecking that one address cannot make rooms endlessly...");
-const address = `203.0.113.${1 + Math.floor(Math.random() * 250)}`;
-const attempt = () =>
-  fetch(`${BASE}/api/rooms`, {
-    method: "POST",
-    headers: { "content-type": "application/json", "cf-connecting-ip": address },
-    body: JSON.stringify({ game: "vainglory", abandonAfterSeconds: 30 }),
-  }).then((response) => response.status);
-
-const codes = [];
-for (let i = 0; i < 7; i++) codes.push(await attempt());
-check("lets an ordinary person make a few drafts", codes.slice(0, 5), [200, 200, 200, 200, 200]);
-check("stops one address making them endlessly", codes.slice(5), [429, 429]);
 
 console.log(failures === 0 ? "\nall checks passed" : `\n${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);

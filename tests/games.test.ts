@@ -31,7 +31,6 @@ describe("the packs that ship", () => {
           script: preset.script,
           pool: allItemIds(game),
           mirror: game.defaults.mirror,
-          autoFill: "random",
           seed: preset.id,
         }),
       );
@@ -67,7 +66,6 @@ describe("a Counter-Strike map veto", () => {
         script: preset.script,
         pool: allItemIds(cs2),
         mirror: false,
-        autoFill: "random",
         seed: "veto",
       }),
     );

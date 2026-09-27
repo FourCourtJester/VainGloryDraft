@@ -22,7 +22,6 @@
       "name": "Best of 1 veto",
       "official": false,
       "script": "A ban, B ban, A ban, B ban, A ban, B ban, remaining pick",
-      "teamSize": 1,
       "notes": "Each side bans three in turn and the map left standing is played. This is the common Valve Major shape; check it against the tournament's own rulebook before relying on it."
     },
     {
@@ -30,7 +29,6 @@
       "name": "Best of 3 veto",
       "official": false,
       "script": "A ban, B ban, A pick, B pick, A ban, B ban, remaining pick",
-      "teamSize": 1,
       "notes": "A ban each, a pick each, another ban each, and the map left standing is the decider. Choosing sides on each map is not part of this veto. This is the common Valve Major shape; check it against the tournament's own rulebook before relying on it."
     }
   ]

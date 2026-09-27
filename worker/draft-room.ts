@@ -300,40 +300,6 @@ export class DraftRoom implements DurableObject {
     }
   }
 
-  /**
-   * Tells whoever made the room that the draft is over, if they asked to be
-   * told. Sent once: a bot posting the result to a channel should not post it
-   * twice because a spectator happened to reload.
-   */
-  async #report(): Promise<void> {
-    const room = this.#room!;
-    const callbackUrl = room.pendingReport;
-    if (callbackUrl === null) return;
-
-    const snapshot = room.snapshot;
-    const body = JSON.stringify({
-      roomId: snapshot.roomId,
-      createdAt: snapshot.createdAt,
-      phase: room.phase,
-      game: snapshot.game,
-      teams: snapshot.draft.config.teams,
-      format: formatScript(snapshot.draft.config.script),
-      players: room.players(),
-      ...room.record(),
-    });
-
-    room.markReported();
-    await this.#ctx.storage.put(SNAPSHOT_KEY, room.snapshot);
-    this.#persisted = room.snapshot;
-
-    try {
-      await fetch(callbackUrl, { method: "POST", headers: { "content-type": "application/json" }, body });
-    } catch {
-      // Nothing useful to do about a bot that is down; the draft is safe here
-      // and can be fetched whenever it comes back.
-    }
-  }
-
   /** Writes the room down, sets its alarm, and sends everyone their own view. */
   async #settle(events: readonly DraftEvent[], now: number): Promise<void> {
     const room = this.#room!;
@@ -356,7 +322,6 @@ export class DraftRoom implements DurableObject {
       if (socket !== undefined) send(socket, { t: "state", phase: room.phase, serverTime: now, projection, events });
     }
 
-    await this.#report();
   }
 }
 

@@ -894,6 +894,13 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .brand { display: flex; align-items: center; gap: 12px; }
 
 .create label, .join label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); }
+/* A checkbox sits beside what it says, not above it. */
+.create label.row { flex-direction: row; align-items: center; gap: 9px; }
+.create label.row input { width: 16px; height: 16px; margin: 0; }
+
+/* Outside a room nobody is on the clock, so the buttons wear the app's own
+   accent rather than a team's. */
+.create, .join { --active: var(--a); --active-glow: var(--t0-glow); }
 
 .links { display: flex; flex-direction: column; gap: 10px; }
 .link-body { display: flex; flex-direction: column; gap: 4px; }

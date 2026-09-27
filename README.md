@@ -41,10 +41,10 @@ chose it (a pick). How to write a pack, and the notation in full, are in
 | `src/script.ts` | The notation, validation, and everything derived from a format |
 | `src/engine.ts` | The rules: whose turn, what is legal, staging, locking in, blind reveals, timeouts |
 | `src/timer.ts` | Per-turn clock plus a reserve per team. Pure: computes, never counts down |
-| `src/events.ts` | `choice \| turnChange \| draftComplete` and a subscription bus |
+| `src/events.ts` | `choice \| turnChange \| draftComplete`, worked out by comparing two states |
 | `src/record.ts` | The account of a finished draft, derived from its choices |
 | `src/projection.ts` | What each person in a room is allowed to see |
-| `src/config.ts` | Room defaults: mirrors off, auto-fill random |
+| `src/config.ts` | Room defaults: mirrors off |
 | `src/game.ts` | What a pack is, and the checks it must pass to load |
 | `src/games.ts` | The one place that knows which packs exist |
 | `games/<id>/` | The packs: `game.json` by hand, `catalog.json` by the import scripts |
@@ -52,7 +52,6 @@ chose it (a pick). How to write a pack, and the notation in full, are in
 | `src/room/roster.ts` | Who is on each side, who leads, and who has said they are ready |
 | `src/room/suggestions.ts` | What a side has asked its own captain for |
 | `worker/` | Durable Object and Worker routes — a thin adapter over `Room` |
-| `worker/gatekeeper.ts` | One per address, so an open site cannot be scripted at |
 | `client/` | React + Vite SPA: the create screen and the draft room |
 | `scripts/import-catalog.mjs` | Takes a roster export and writes a game's catalog |
 | `scripts/import-portraits.mjs` | Squares, shrinks and self-hosts a folder of pictures |
@@ -60,11 +59,11 @@ chose it (a pick). How to write a pack, and the notation in full, are in
 
 ```
 npm install
-npm test          # 297 tests
+npm test          # 295 tests
 npm run typecheck
 npm run dev       # builds the client, then wrangler dev on :8787
 npm run smoke     # the protocol end to end against a running dev worker
-npm run ui-check  # a real browser, a squad a side, each in its own window
+npm run ui-check  # a real browser, several players, each in its own window
 ```
 
 Open http://127.0.0.1:8787, choose a game, create a room, and open two team
@@ -93,10 +92,10 @@ Any turn can carry its own time (`@45s`) in place of the room's usual one.
 
 - **Nothing is committed until confirm.** Click to stage, click again to
   unstage, then confirm. A `count: 2` turn is one confirm, not two.
-- **Timeouts are deterministic.** `autoFillSelection` keeps whatever was staged
-  and fills only the remainder, seeded from the room seed plus the turn index, so
-  any auto-action can be replayed from the room log and argued about with facts.
-  Random is the rule for every timeout — see [docs/DECISIONS.md](docs/DECISIONS.md).
+- **Timeouts are random, and repeatable.** `autoFillSelection` keeps whatever was
+  staged and draws only the remainder, seeded from the room seed plus the turn
+  index, so any auto-action can be replayed from the room log and argued about
+  with facts — see [docs/DECISIONS.md](docs/DECISIONS.md).
 - **No pause.** The clock is a pure function of `turnStartedAt` and each team's
   reserve. A disconnect burns time like any other silence; the room shows who is
   connected and leaves the decision to the people running it.
@@ -105,33 +104,31 @@ Any turn can carry its own time (`@45s`) in place of the room's usual one.
 - **Mirrors are per room**, defaulting to the game's rule. A team can never take
   the same thing twice regardless, and something taken can never be removed
   afterwards.
-- **The engine does not know consumers exist.** Events are derived by comparing
-  two states (`diffEvents`), so a stats panel, an overlay or a webhook is a new
-  subscriber and never surgery on the engine.
+- **Events are derived, not recorded.** `diffEvents` compares two states, so a
+  room picked back up from storage announces exactly what an uninterrupted one
+  would have.
 - **The room never reads a pack.** It is handed its teams, actions, format and
   pool when it is made and keeps a copy, so editing a pack cannot change a draft
   in progress, and the room can run any game.
 - **Each side gets a short code, spectators get a link.** A code is six
   characters that can be read out over voice, carried in a link for one tap, or
   typed. Wrong codes are counted and the room stops answering after a handful.
-- **A whole squad joins, and one of them chooses.** Everyone on a team uses the
-  same code; the first to arrive leads and can hand that job to a teammate, or
-  have it taken over if they drop.
-- **The draft starts on a ready check**, not on a connection. Every player has to
-  be present and confirm — or every side's leader can agree to begin
-  short-handed, for a no-show.
-- **Players tell their captain what they want**, with any of the draft's
-  actions. The captain reads the marks most-agreed first and still makes every
-  decision. Marks are never shown to another side.
+- **Captains only, or whole squads — the room's choice.** By default one captain
+  a side joins and the room waits for nobody else; anybody else with the link is
+  a stand-in who can take over if the captain drops. With squads, everyone on a
+  team joins on the same code, the first to arrive chooses, and teammates tell
+  their captain what they want — marks the other side never sees.
+- **The draft starts on a ready check**, not on a connection — on by default,
+  and a room can turn it off to begin the moment the last person arrives. With
+  squads, the leaders can also agree to begin short-handed, for a no-show.
 - **Names arrive already filled in**, and identity is an id, never a name or a
   device fingerprint — see [docs/IDENTITY.md](docs/IDENTITY.md).
 - **A finished draft is kept and can be read back**, choice by choice, with when
   each landed and whether the clock chose it.
 - **A room clears itself out.** A finished draft is kept a month; a room nobody
   ever played in goes six hours after the last sign of anybody in it.
-- **Anybody may start a draft.** Every address gets an allowance — five rooms in
-  a burst, one back every twenty seconds, a hundred a day. A tournament's own
-  bot holds a key that skips it.
+- **Anybody may start a draft.** There is no key and no limit in the app; if the
+  site is ever scripted at, Cloudflare's own rate-limiting rule covers it.
 
 ## The packs
 

@@ -266,10 +266,6 @@ export function autoFillSelection(state: DraftState, team: Team | null): readonl
   if (shortfall <= 0) return kept;
 
   const candidates = legalItems(state, team).filter((itemId) => !kept.includes(itemId));
-  if (state.config.autoFill === "lowestIndex") {
-    return [...kept, ...candidates.slice(0, shortfall)];
-  }
-
   // Each team on a blind turn gets dice of its own, so one side running out of
   // time tells nobody anything about what the other will be given.
   const salt = turn.teams.length > 1 && team !== null ? `:${team}` : "";

@@ -28,10 +28,13 @@ export function CreateRoom(): JSX.Element {
   const [presetId, setPresetId] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
   const [mirror, setMirror] = useState<boolean | null>(null);
+  // Captains only unless the organiser wants whole squads in the room.
+  const [squads, setSquads] = useState(false);
+  const [readyCheck, setReadyCheck] = useState(true);
   const [perTurnSeconds, setPerTurnSeconds] = useState<number | null>(null);
   const [bankSeconds, setBankSeconds] = useState<number | null>(null);
-  // How many players a side waits for. Follows the format unless the organiser
-  // says otherwise — a captains-only draft is one a side.
+  // How many players a side waits for, when whole squads join. Follows the
+  // format unless the organiser says otherwise.
   const [teamSize, setTeamSize] = useState<number | null>(null);
   const [room, setRoom] = useState<Created | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +78,9 @@ export function CreateRoom(): JSX.Element {
           mirror: mirrors,
           perTurnMs: turnSeconds * 1000,
           bankMs: reserveSeconds * 1000,
-          teamSize: teamSize ?? undefined,
+          joining: squads ? "squads" : "captains",
+          readyCheck,
+          ...(squads && teamSize !== null ? { teamSize } : {}),
         }),
       });
       const data = (await response.json()) as Created & { error?: string };
@@ -94,9 +99,13 @@ export function CreateRoom(): JSX.Element {
         <Brand />
         <h1>Room {room.roomId}</h1>
         <p className="note">
-          Send each side its own link. Everyone on a team uses the same one; the first to arrive does the
-          choosing and can hand that job to a teammate. The draft starts once every player is ready — until
-          then the clock is not running.
+          Send each side its own link.{" "}
+          {squads
+            ? "Everyone on a team uses the same one; the first to arrive does the choosing and can hand that job to a teammate."
+            : "The captain opens it; anybody else who does can step in if the captain drops."}{" "}
+          {readyCheck
+            ? "The clock starts once everybody has said they are ready."
+            : "The clock starts the moment the last of them arrives."}
         </p>
         <ul className="links">
           {room.teams.map((team) => (
@@ -178,18 +187,34 @@ export function CreateRoom(): JSX.Element {
       </label>
 
       <label>
-        Players per side
-        <input
-          type="number"
-          min={1}
-          max={10}
-          value={teamSize ?? (usingCustom ? 1 : (preset?.teamSize ?? 1))}
-          onChange={(event) => setTeamSize(Number(event.target.value))}
-        />
+        Who joins
+        <select value={squads ? "squads" : "captains"} onChange={(event) => setSquads(event.target.value === "squads")}>
+          <option value="captains">Captains only</option>
+          <option value="squads">Whole squads</option>
+        </select>
       </label>
+      {squads && (
+        <label>
+          Players per side
+          <input
+            type="number"
+            min={1}
+            max={10}
+            value={teamSize ?? (usingCustom ? 1 : (preset?.teamSize ?? 1))}
+            onChange={(event) => setTeamSize(Number(event.target.value))}
+          />
+        </label>
+      )}
       <p className="note">
-        Everyone joins before the draft begins. Set this to 1 if only the captains are turning up.
+        {squads
+          ? "The whole team joins: teammates watch their own side choose and can tell their captain what they want. The room waits for all of them."
+          : "One captain a side does the choosing. Nobody else is waited for."}
       </p>
+
+      <label className="row">
+        <input type="checkbox" checked={readyCheck} onChange={(event) => setReadyCheck(event.target.checked)} />
+        Ready check before the clock starts
+      </label>
 
       <label>
         Seconds per turn

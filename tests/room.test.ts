@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { currentTurn } from "../src/engine.js";
 import { parseClientMessage } from "../src/room/protocol.js";
-import { parseAutoFill, parseTimerRules } from "../src/room/options.js";
+import { parseTimerRules } from "../src/room/options.js";
 import { DEFAULT_TIMER_RULES, Room } from "../src/room/room.js";
 import type { RoomSnapshot } from "../src/room/room.js";
 import { credentialsMatch, generateCode, generateCredentials, generateToken, normaliseCode } from "../src/room/tokens.js";
@@ -25,11 +25,9 @@ function snapshotOptions(): Parameters<typeof Room.create>[0] {
     actions: ACTIONS,
     script: script("Aban, Bban, Apick, Bpick x2, Apick"),
     pool: ["a", "b", "c", "d", "e", "f", "g"],
-    autoFill: "lowestIndex",
     seed: "seed",
     credentials: CREDS,
     roomId: "room-1",
-    teamSize: 1,
   };
 }
 
@@ -162,23 +160,6 @@ describe("guessing at a captain's code", () => {
   });
 });
 
-describe("reporting a finished draft", () => {
-  it("has nothing to report when nobody asked", () => {
-    const room = liveRoom();
-    while (room.phase === "drafting") room.tick(room.alarmAt()! + 1);
-    expect(room.pendingReport).toBeNull();
-  });
-
-  it("reports once the draft is over, and only once", () => {
-    const room = liveRoom({ callbackUrl: "https://bot.example/draft-done" });
-    expect(room.pendingReport).toBeNull(); // not while it is still being played
-    while (room.phase === "drafting") room.tick(room.alarmAt()! + 1);
-    expect(room.pendingReport).toBe("https://bot.example/draft-done");
-    room.markReported();
-    expect(room.pendingReport).toBeNull();
-  });
-});
-
 describe("the lobby", () => {
   it("does not start, or burn clock, until everybody says they are ready", () => {
     const room = seatedRoom();
@@ -230,7 +211,7 @@ describe("the lobby", () => {
 
 describe("who leads a side", () => {
   const bigRoom = (): Room => {
-    const room = new Room(snapshot({ teamSize: 3 }));
+    const room = new Room(snapshot({ joining: "squads", teamSize: 3 }));
     for (const [id, name] of [["a1", "Ana"], ["a2", "Ali"], ["a3", "Ash"]] as const) {
       room.attach(`c-${id}`, room.seat("A", id, name, T0), T0);
     }
@@ -450,11 +431,20 @@ describe("persistence", () => {
 });
 
 describe("defaults", () => {
-  it("falls back to the default clock, and works out how many players a side has", () => {
-    const { teamSize: _unused, ...rest } = snapshotOptions();
-    const room = new Room(Room.create(rest, T0));
+  it("falls back to the default clock, and waits for captains only", () => {
+    const room = new Room(snapshot());
     expect(room.snapshot.rules).toEqual(DEFAULT_TIMER_RULES);
-    expect(room.snapshot.roster.teamSize).toBe(2);
+    expect(room.snapshot).toMatchObject({ joining: "captains", readyCheck: true });
+    expect(room.snapshot.roster.teamSize).toBe(1);
+  });
+
+  it("works out a squad's size from the format when whole squads join", () => {
+    expect(new Room(snapshot({ joining: "squads" })).snapshot.roster.teamSize).toBe(2);
+    expect(new Room(snapshot({ joining: "squads", teamSize: 4 })).snapshot.roster.teamSize).toBe(4);
+  });
+
+  it("ignores a squad size when only captains join", () => {
+    expect(new Room(snapshot({ teamSize: 4 })).snapshot.roster.teamSize).toBe(1);
   });
 
   it("refuses to create a room whose script the pool cannot satisfy", () => {
@@ -519,12 +509,6 @@ describe("option validation", () => {
     expect(parseTimerRules(undefined, undefined, own).rules).toEqual(own);
     expect(parseTimerRules(45_000, undefined, own).rules).toEqual({ perTurnMs: 45_000, bankMs: 120_000 });
   });
-
-  it("only accepts the two auto-fill strategies", () => {
-    expect(parseAutoFill("random")).toBe("random");
-    expect(parseAutoFill("lowestIndex")).toBe("lowestIndex");
-    for (const bad of ["lowest", "", null, 7]) expect(parseAutoFill(bad)).toBeUndefined();
-  });
 });
 
 describe("a command that changes nothing must not swallow the clock", () => {
@@ -569,7 +553,7 @@ describe("a command that changes nothing must not swallow the clock", () => {
 
 describe("beginning without a full room", () => {
   const shortRoom = (): Room => {
-    const room = new Room(snapshot({ teamSize: 3 }));
+    const room = new Room(snapshot({ joining: "squads", teamSize: 3 }));
     room.attach("c-a1", room.seat("A", "a1", "Ana", T0), T0);
     room.attach("c-b1", room.seat("B", "b1", "Ben", T0), T0);
     return room;
@@ -604,7 +588,7 @@ describe("beginning without a full room", () => {
   });
 
   it("still needs somebody on each side to do the picking", () => {
-    const room = new Room(snapshot({ teamSize: 3 }));
+    const room = new Room(snapshot({ joining: "squads", teamSize: 3 }));
     room.attach("c-a1", room.seat("A", "a1", "Ana", T0), T0);
     room.command(CAPTAIN_A, { t: "startAnyway", agreed: true }, T0);
     expect(room.canBegin()).toBe(false);
@@ -830,5 +814,59 @@ describe("suggestions", () => {
     expect(room.projection(CAPTAIN_B, T0).suggestions).toEqual([{ itemId: "c", by: { pick: ["Ben"] }, total: 1 }]);
     expect(room.command(CAPTAIN_B, { t: "suggest", itemId: "c", intent: "want" }, T0).error?.code).toBe("unknown_action");
     expect(room.command(CAPTAIN_B, { t: "suggest", itemId: "zz", intent: "pick" }, T0).error?.code).toBe("unknown_item");
+  });
+});
+
+describe("who a room waits for", () => {
+  it("with captains only, waits for one person a side", () => {
+    const room = new Room(snapshot());
+    room.attach("c-a1", room.seat("A", "a1", "Ana", T0), T0);
+    room.attach("c-b1", room.seat("B", "b1", "Ben", T0), T0);
+    expect(room.lobby(null).everyoneHere).toBe(true);
+    room.command(CAPTAIN_A, { t: "ready", ready: true }, T0);
+    room.command(CAPTAIN_B, { t: "ready", ready: true }, T0);
+    expect(room.phase).toBe("drafting");
+  });
+
+  it("does not let a captain's second device hold up the ready check", () => {
+    // Somebody opening the team link on their phone as well arrives as a
+    // second person. They can step in if the captain drops, but nobody waits
+    // for them to say they are ready.
+    const room = new Room(snapshot());
+    room.attach("c-a1", room.seat("A", "a1", "Ana", T0), T0);
+    room.attach("c-a2", room.seat("A", "a2", "Ana's phone", T0), T0);
+    room.attach("c-b1", room.seat("B", "b1", "Ben", T0), T0);
+    room.command(CAPTAIN_A, { t: "ready", ready: true }, T0);
+    room.command(CAPTAIN_B, { t: "ready", ready: true }, T0);
+    expect(room.phase).toBe("drafting");
+  });
+
+  it("with whole squads, waits for every one of them", () => {
+    const room = new Room(snapshot({ joining: "squads", teamSize: 2 }));
+    room.attach("c-a1", room.seat("A", "a1", "Ana", T0), T0);
+    room.attach("c-b1", room.seat("B", "b1", "Ben", T0), T0);
+    room.command(CAPTAIN_A, { t: "ready", ready: true }, T0);
+    room.command(CAPTAIN_B, { t: "ready", ready: true }, T0);
+    expect(room.phase).toBe("lobby");
+    expect(room.lobby(null)).toMatchObject({ joining: "squads", teamSize: 2, everyoneHere: false });
+  });
+
+  it("without a ready check, starts the moment the last captain arrives", () => {
+    const room = new Room(snapshot({ readyCheck: false }));
+    room.attach("c-a1", room.seat("A", "a1", "Ana", T0), T0);
+    expect(room.phase).toBe("lobby");
+    room.attach("c-b1", room.seat("B", "b1", "Ben", T0 + 5_000), T0 + 5_000);
+    expect(room.phase).toBe("drafting");
+    expect(room.snapshot.timer.turnStartedAt).toBe(T0 + 5_000);
+  });
+
+  it("without a ready check, still waits for a whole squad to arrive", () => {
+    const room = new Room(snapshot({ joining: "squads", teamSize: 2, readyCheck: false }));
+    room.attach("c-a1", room.seat("A", "a1", "Ana", T0), T0);
+    room.attach("c-b1", room.seat("B", "b1", "Ben", T0), T0);
+    room.attach("c-a2", room.seat("A", "a2", "Ali", T0), T0);
+    expect(room.phase).toBe("lobby");
+    room.attach("c-b2", room.seat("B", "b2", "Bea", T0), T0);
+    expect(room.phase).toBe("drafting");
   });
 });

@@ -6,16 +6,13 @@ import { ACTIONS, TEAMS, script } from "./helpers.js";
 const BASE = { teams: TEAMS, actions: ACTIONS, script: script("Aban, Bpick"), pool: ["a", "b", "c"], seed: "room-1" };
 
 describe("draftConfig", () => {
-  it("defaults mirrors off and auto-fill to random", () => {
-    expect(draftConfig(BASE)).toMatchObject({ mirror: false, autoFill: "random" });
-    expect(DRAFT_DEFAULTS.autoFill).toBe("random");
+  it("defaults mirrors off", () => {
+    expect(draftConfig(BASE)).toMatchObject({ mirror: false });
+    expect(DRAFT_DEFAULTS.mirror).toBe(false);
   });
 
-  it("lets a room override either default", () => {
-    expect(draftConfig({ ...BASE, mirror: true, autoFill: "lowestIndex" })).toMatchObject({
-      mirror: true,
-      autoFill: "lowestIndex",
-    });
+  it("lets a room allow mirrors", () => {
+    expect(draftConfig({ ...BASE, mirror: true })).toMatchObject({ mirror: true });
   });
 
   it("produces a config the engine accepts", () => {
