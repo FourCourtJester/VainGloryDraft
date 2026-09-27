@@ -1,0 +1,13 @@
+{
+  "note": "An example seven-map pool, here to show the engine running a game that is not Vainglory. Valve rotates the Active Duty maps; check this list against the current one before using it for a real match.",
+  "filters": [],
+  "items": [
+    { "id": "ancient", "name": "Ancient", "image": null, "tags": {} },
+    { "id": "anubis", "name": "Anubis", "image": null, "tags": {} },
+    { "id": "dust2", "name": "Dust II", "image": null, "tags": {} },
+    { "id": "inferno", "name": "Inferno", "image": null, "tags": {} },
+    { "id": "mirage", "name": "Mirage", "image": null, "tags": {} },
+    { "id": "nuke", "name": "Nuke", "image": null, "tags": {} },
+    { "id": "train", "name": "Train", "image": null, "tags": {} }
+  ]
+}

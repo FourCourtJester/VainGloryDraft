@@ -6,7 +6,7 @@
  * says who they are, so nobody can claim to be the other captain by asking
  * nicely.
  *
- * A screen only ever asks for things — choose this hero, confirm, tell me where
+ * A screen only ever asks for things — choose this, confirm, tell me where
  * we are. It is the room that decides what actually happens.
  */
 
@@ -17,8 +17,8 @@ import type { DraftErrorCode } from "../types.js";
 export type RoomPhase = "lobby" | "drafting" | "complete";
 
 export type ClientMessage =
-  | { readonly t: "stage"; readonly heroId: string }
-  | { readonly t: "unstage"; readonly heroId: string }
+  | { readonly t: "stage"; readonly itemId: string }
+  | { readonly t: "unstage"; readonly itemId: string }
   | { readonly t: "confirm" }
   | { readonly t: "resync" }
   /** "I am ready for the draft to begin", or taking that back. */
@@ -28,12 +28,15 @@ export type ClientMessage =
   /** A teammate stepping in when the leader is not connected. */
   | { readonly t: "claimLead" }
   /**
-   * A side's leader agreeing to begin without a full room. Both sides' leaders
-   * have to say so, which is how a tournament gets past a no-show.
+   * A side's leader agreeing to begin without a full room. Every side's leader
+   * has to say so, which is how a tournament gets past a no-show.
    */
   | { readonly t: "startAnyway"; readonly agreed: boolean }
-  /** Telling your own captain you want a hero, or want it banned. */
-  | { readonly t: "suggest"; readonly heroId: string; readonly intent: "want" | "ban" };
+  /**
+   * Telling your own captain what you would do with something: one of the
+   * draft's actions, such as "pick" or "ban".
+   */
+  | { readonly t: "suggest"; readonly itemId: string; readonly intent: string };
 
 export type RoomErrorCode =
   | DraftErrorCode
@@ -41,7 +44,8 @@ export type RoomErrorCode =
   | "not_a_player"
   | "bad_message"
   | "not_your_call"
-  | "leader_present";
+  | "leader_present"
+  | "unknown_action";
 
 export interface RoomError {
   readonly code: RoomErrorCode;
@@ -81,7 +85,7 @@ export function parseClientMessage(raw: string): ClientMessage | null {
 
   const message = parsed as {
     t?: unknown;
-    heroId?: unknown;
+    itemId?: unknown;
     ready?: unknown;
     memberId?: unknown;
     agreed?: unknown;
@@ -96,12 +100,12 @@ export function parseClientMessage(raw: string): ClientMessage | null {
     case "startAnyway":
       return typeof message.agreed === "boolean" ? { t: "startAnyway", agreed: message.agreed } : null;
     case "suggest":
-      return typeof message.heroId === "string" && (message.intent === "want" || message.intent === "ban")
-        ? { t: "suggest", heroId: message.heroId, intent: message.intent }
+      return typeof message.itemId === "string" && typeof message.intent === "string"
+        ? { t: "suggest", itemId: message.itemId, intent: message.intent }
         : null;
     case "stage":
     case "unstage":
-      return typeof message.heroId === "string" ? { t: message.t, heroId: message.heroId } : null;
+      return typeof message.itemId === "string" ? { t: message.t, itemId: message.itemId } : null;
     case "ready":
       return typeof message.ready === "boolean" ? { t: "ready", ready: message.ready } : null;
     case "handOver":

@@ -1,0 +1,37 @@
+{
+  "id": "cs2",
+  "name": "Counter-Strike 2",
+  "terms": { "item": "map", "items": "maps" },
+  "teams": [
+    { "id": "A", "name": "Team A" },
+    { "id": "B", "name": "Team B" }
+  ],
+  "actions": [
+    { "id": "ban", "label": "Ban", "past": "banned", "effect": "remove" },
+    { "id": "pick", "label": "Pick", "past": "picked", "effect": "take" }
+  ],
+  "defaults": {
+    "preset": "cs2-bo3",
+    "mirror": false,
+    "perTurnMs": 60000,
+    "bankMs": 120000
+  },
+  "presets": [
+    {
+      "id": "cs2-bo1",
+      "name": "Best of 1 veto",
+      "official": false,
+      "script": "A ban, B ban, A ban, B ban, A ban, B ban, remaining pick",
+      "teamSize": 1,
+      "notes": "Each side bans three in turn and the map left standing is played. This is the common Valve Major shape; check it against the tournament's own rulebook before relying on it."
+    },
+    {
+      "id": "cs2-bo3",
+      "name": "Best of 3 veto",
+      "official": false,
+      "script": "A ban, B ban, A pick, B pick, A ban, B ban, remaining pick",
+      "teamSize": 1,
+      "notes": "A ban each, a pick each, another ban each, and the map left standing is the decider. Choosing sides on each map is not part of this veto. This is the common Valve Major shape; check it against the tournament's own rulebook before relying on it."
+    }
+  ]
+}

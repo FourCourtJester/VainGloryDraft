@@ -1,4 +1,4 @@
-import type { Turn } from "../../src/types.js";
+import type { ActionDefinition, Team, TeamDefinition, Turn } from "../../src/types.js";
 
 /**
  * Writes a length of time the way a countdown should read: minutes and seconds
@@ -26,13 +26,42 @@ export function duration(ms: number): string {
   return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
 }
 
-/** Says whose turn it is in words, such as "Team B picks 2". */
-export function describeTurn(turn: Turn): string {
-  const verb = turn.action === "ban" ? "bans" : "picks";
-  return `Team ${turn.team} ${verb}${turn.count > 1 ? ` ${turn.count}` : ""}`;
+export function teamName(teams: readonly TeamDefinition[], id: Team): string {
+  return teams.find((team) => team.id === id)?.name ?? id;
 }
 
-/** The word for the confirm button: Ban or Pick. */
-export function verbFor(turn: Turn): string {
-  return turn.action === "ban" ? "Ban" : "Pick";
+export function actionOf(actions: readonly ActionDefinition[], id: string): ActionDefinition | undefined {
+  return actions.find((action) => action.id === id);
+}
+
+/**
+ * Which colour a team wears: its place in the draft, not its name, so any game's
+ * teams are coloured the same way. The stylesheet has four; a fifth team would
+ * share the first's.
+ */
+export function slotOf(teams: readonly TeamDefinition[], id: Team): string {
+  return `t${Math.max(0, teams.findIndex((team) => team.id === id)) % 4}`;
+}
+
+/**
+ * Says whose turn it is in words, such as "Team B · Pick 2".
+ *
+ * Written as who and what rather than as a sentence, because the actions are
+ * whatever a game calls them and not every word turns into a verb neatly.
+ */
+export function describeTurn(turn: Turn, teams: readonly TeamDefinition[], actions: readonly ActionDefinition[]): string {
+  const who = turn.teams.length === 0 ? "Remaining" : turn.teams.map((team) => teamName(teams, team)).join(" + ");
+  const count = turn.count > 1 ? ` ${turn.count}` : "";
+  return `${who} · ${verbFor(turn, actions)}${count}`;
+}
+
+/** The word for the confirm button, which is whatever the game calls this action. */
+export function verbFor(turn: Turn, actions: readonly ActionDefinition[]): string {
+  return actionOf(actions, turn.action)?.label ?? turn.action;
+}
+
+/** "3 picks", "1 ban" — counting a whole draft's worth of one action, for a footer. */
+export function tally(count: number, action: ActionDefinition): string {
+  const word = action.label.toLowerCase();
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
 }

@@ -1,22 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { commit, createDraft, currentTurn, isComplete, resolveTimeout, stage } from "../src/engine.js";
 import { draftRecord } from "../src/record.js";
-import { parseScript } from "../src/script.js";
-import type { DraftState, Result } from "../src/types.js";
+import type { DraftState, Team } from "../src/types.js";
+import { ACTIONS, TEAMS, must, script } from "./helpers.js";
 
 const T0 = 1_700_000_000_000;
 
-function must<T>(result: Result<T>): T {
-  if (!result.ok) throw new Error(result.error.message);
-  return result.value;
-}
-
-function start(): DraftState {
+function start(order = "Aban, Bban, Apick, Bpick x2"): DraftState {
   return must(
     createDraft({
-      script: parseScript("Aban, Bban, Apick, Bpick x2"),
-      heroPool: ["a", "b", "c", "d", "e", "f"],
-      mirrorPicks: false,
+      teams: TEAMS,
+      actions: ACTIONS,
+      script: script(order),
+      pool: ["a", "b", "c", "d", "e", "f"],
+      mirror: false,
       autoFill: "lowestIndex",
       seed: "seed",
     }),
@@ -24,7 +21,10 @@ function start(): DraftState {
 }
 
 function play(state: DraftState, at: number, ...heroes: string[]): DraftState {
-  const team = currentTurn(state)!.team;
+  return playAs(state, currentTurn(state)!.teams[0]!, at, ...heroes);
+}
+
+function playAs(state: DraftState, team: Team, at: number, ...heroes: string[]): DraftState {
   let next = state;
   for (const hero of heroes) next = must(stage(next, team, hero));
   return must(commit(next, team, at));
@@ -46,7 +46,7 @@ describe("draftRecord", () => {
       "3:Apick",
       "4:Bpick",
     ]);
-    expect(record.turns.at(-1)?.heroes).toEqual(["d", "e"]);
+    expect(record.turns.at(-1)?.items).toEqual(["d", "e"]);
   });
 
   it("says how long each turn took, and the draft as a whole", () => {
@@ -61,7 +61,21 @@ describe("draftRecord", () => {
     expect(record.durationMs).toBe(21_000);
   });
 
-  it("marks the heroes the clock chose, and counts them per team", () => {
+  it("times every team on a blind turn from when that turn began", () => {
+    let state = start("A+B ban, Apick, remaining pick");
+    state = playAs(state, "B", T0 + 4_000, "a");
+    state = playAs(state, "A", T0 + 9_000, "b");
+    state = play(state, T0 + 15_000, "c");
+    const record = draftRecord(state, T0);
+    expect(record.turns.map((turn) => [turn.number, turn.team, turn.tookMs])).toEqual([
+      [1, "A", 9_000],
+      [1, "B", 4_000],
+      [2, "A", 6_000],
+      [3, null, null],
+    ]);
+  });
+
+  it("marks what the clock chose, and counts it per team", () => {
     let state = start();
     state = play(state, T0 + 5_000, "a");
     state = must(resolveTimeout(state, T0 + 95_000)); // B ran out of time
@@ -102,5 +116,15 @@ describe("draftRecord", () => {
     const record = draftRecord(older, null);
     expect(record.turns[0]).toMatchObject({ team: "A", action: "ban", tookMs: null });
     expect(record.durationMs).toBeNull();
+  });
+});
+
+describe("the length of a draft", () => {
+  it("runs from the earliest choice to the latest, whichever team is listed first", () => {
+    let state = start("A+B ban, Apick");
+    state = playAs(state, "B", T0 + 2_000, "a");
+    state = playAs(state, "A", T0 + 5_000, "b");
+    state = play(state, T0 + 9_000, "c");
+    expect(draftRecord(state, T0).durationMs).toBe(7_000);
   });
 });

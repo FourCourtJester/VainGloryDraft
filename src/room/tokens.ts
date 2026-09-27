@@ -19,14 +19,15 @@
  * you the game.
  */
 
+import type { Team } from "../types.js";
+
 /** No O or 0, no I, L or 1: these get read aloud and typed by hand. */
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 6;
 
 export interface RoomCredentials {
-  /** The captains' codes, one per side. */
-  readonly A: string;
-  readonly B: string;
+  /** The teams' codes, one per side. */
+  readonly codes: Readonly<Record<Team, string>>;
   /** The spectator link's token. Long, because nobody types it. */
   readonly spectator: string;
 }
@@ -61,9 +62,22 @@ export function generateCode(length = CODE_LENGTH): string {
   return code;
 }
 
-/** Everything a new room hands out. */
-export function generateCredentials(): RoomCredentials {
-  return { A: generateCode(), B: generateCode(), spectator: generateToken() };
+/**
+ * Everything a new room hands out: a code for each team, all different, and a
+ * spectator token.
+ */
+export function generateCredentials(teams: readonly Team[]): RoomCredentials {
+  const codes: Record<Team, string> = {};
+  const used = new Set<string>();
+  for (const team of teams) {
+    let code = generateCode();
+    // Thirty-one characters to the sixth power makes a clash vanishingly
+    // unlikely, but two teams holding the same code would be one team.
+    while (used.has(code)) code = generateCode();
+    used.add(code);
+    codes[team] = code;
+  }
+  return { codes, spectator: generateToken() };
 }
 
 /** Codes get typed, so treat case and stray spaces as the person meant them. */

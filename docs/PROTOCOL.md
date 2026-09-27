@@ -7,36 +7,46 @@ connect over a WebSocket and are told what they are allowed to see.
 
 | Route | Purpose |
 |---|---|
-| `POST /api/rooms` | Create a room. Returns `roomId` and the three links. |
+| `POST /api/rooms` | Create a room. Returns `roomId`, a link and a code per team, and a spectator link. |
 | `GET /api/rooms/:id/ws?token=` or `?code=` | WebSocket upgrade. |
 | `GET /api/rooms/:id/state?token=` or `?code=` | One-shot projection. A fallback for reconnects. |
 | `GET /api/rooms/:id/record?token=` or `?code=` | The whole draft in the order it happened. |
-| `GET /api/heroes` | Static roster, with the `verified` flag. |
-| `GET /api/presets` | Preset list plus the still-`PENDING` ids. |
+| `GET /api/games` | Every game on offer, with its formats and defaults. |
+| `GET /api/games/:id` | One game in full: teams, actions, its catalog, and the filters that can be trusted. |
 
-`POST /api/rooms` body (all optional):
+`POST /api/rooms` body — `game` is required, everything else optional:
 
-```json
-{ "presetId": "vg-5v5-standard", "script": "Aban, Bban, Apick x2",
-  "mirrorPicks": false, "autoFill": "random", "perTurnMs": 30000, "bankMs": 60000,
-  "callbackUrl": "https://bot.example/draft-finished" }
+```jsonc
+{ "game": "vainglory",
+  "preset": "vg-5v5-standard",          // one of the game's formats…
+  "script": "A ban, B ban, A pick x2",  // …or an order written out, which wins
+  "teams": [{ "id": "A", "name": "Liquid" }, { "id": "B", "name": "FaZe" }],
+  "pool": ["ozo", "krul", "…"],         // a part of the catalog, if not all of it
+  "mirror": false, "autoFill": "random", "perTurnMs": 30000, "bankMs": 60000,
+  "teamSize": 5, "callbackUrl": "https://bot.example/draft-finished" }
 ```
 
-`script` is compact notation and wins over `presetId`. With neither, a room gets
-`vg-5v5-standard`. The response carries three links — captain A, captain B,
-spectator — of the form `/r/:roomId?token=…`. The Worker serves the SPA there,
-which reads the room id and token straight from the URL.
+`script` is the notation in [GAMES.md](GAMES.md) and wins over `preset`. With
+neither, a room gets the game's default format. `teams` replaces the format's
+teams — other names, or more of them — and must still cover every team the
+order names. The clock and mirror setting default to the game's own.
+
+The room is handed the rules — teams, actions, turns, pool — rather than the
+name of a game to look them up in. It keeps its own copy, and never reads a pack
+itself.
 
 Room options are validated before they reach the engine: `perTurnMs` and `bankMs`
-must be finite numbers inside sane bounds, and an unknown `autoFill` falls back
-to `random` rather than being stored.
+must be finite numbers inside sane bounds, an order must parse and fit the pool,
+a pool may only name things in the game's catalog, and an unknown `autoFill`
+falls back to `random` rather than being stored. Anything wrong comes back as a
+`400` saying what.
 
 ## Identity
 
 A room hands out two kinds of credential, because the two audiences want
 opposite things.
 
-**Players get a six-character code**, one per side, shared by that whole team — `9YZ6P7` — drawn from an alphabet with no
+**Players get a six-character code**, one per team, shared by that whole team — `9YZ6P7` — drawn from an alphabet with no
 characters that get confused when read aloud (no O/0, no I/L/1). It arrives in
 their link, so tapping it is enough, and it can be typed at `/r/:roomId` by
 anyone who was given the code some other way. Case and stray spaces are
@@ -86,23 +96,29 @@ can either paste a link or read a code out:
 
 ```jsonc
 { "roomId": "d0jdFJPePKM",
+  "game": "vainglory",
+  "teams": [{ "id": "A", "name": "Team A" }, { "id": "B", "name": "Team B" }],
+  "format": "A ban, B ban, A ban, B ban, A pick, B pick x2, …",
   "codes": { "A": "9YZ6P7", "B": "QADXBU" },
-  "links": { "teamA": "…?code=9YZ6P7", "teamB": "…?code=QADXBU",
+  "links": { "teams": { "A": "…?code=9YZ6P7", "B": "…?code=QADXBU" },
              "spectator": "…?token=99tXdNC0NnTHe0cRIRi3EQ", "join": "…/r/d0jdFJPePKM" } }
 ```
+
+`codes` and `links.teams` have one entry per team, keyed by team id, however
+many teams there are.
 
 ## Client → server
 
 ```jsonc
-{ "t": "stage",   "heroId": "ozo" }   // toggles: staging a staged hero unstages it
-{ "t": "unstage", "heroId": "ozo" }
+{ "t": "stage",   "itemId": "ozo" }   // toggles: staging something staged unstages it
+{ "t": "unstage", "itemId": "ozo" }
 { "t": "confirm" }                     // commits the whole staged turn at once
 { "t": "resync" }                      // "send me the current state"
 { "t": "ready",     "ready": true }    // "I am ready", or taking that back
 { "t": "handOver",  "memberId": "A:…" } // the leader giving the job to a teammate
 { "t": "claimLead" }                   // a teammate stepping in for an absent leader
 { "t": "startAnyway", "agreed": true } // a leader agreeing to begin short-handed
-{ "t": "suggest", "heroId": "ozo", "intent": "want" }  // or "ban" — telling your own captain
+{ "t": "suggest", "itemId": "ozo", "intent": "pick" }  // any of the draft's actions — telling your own captain
 ```
 
 Anything else is answered with `{"t":"error","error":{"code":"bad_message"}}` and
@@ -111,7 +127,7 @@ changes nothing.
 ## Server → client
 
 ```jsonc
-{ "t": "welcome", "roomId": "…", "viewer": { "role": "captain", "team": "A" } }
+{ "t": "welcome", "roomId": "…", "viewer": { "role": "player", "team": "A", "memberId": "A:…" } }
 { "t": "state",   "phase": "drafting", "serverTime": 1730000000000, "projection": { … }, "events": [ … ] }
 { "t": "error",   "error": { "code": "wrong_team", "message": "…" } }
 ```
@@ -120,11 +136,17 @@ changes nothing.
   compare it with theirs and draw the countdown against the room's, so a viewer
   whose laptop is a minute fast does not see a minute less time.
 - **`state`** goes to every connection after anything changes, each with its own
-  projection. `staged` is `null` for a viewer not allowed to see it; `stagedCount`
-  is always present.
-- **`events`** are committed actions only — `pick`, `ban`, `turnChange`,
-  `draftComplete`. Staging never produces an event, so the subscription surface
-  cannot leak it. This is the hook a stats panel or overlay subscribes to.
+  projection. The projection carries the room's `game`, `teams` and `actions`,
+  so a screen needs no rules of its own — only the game's catalog, for names
+  and pictures. `staged` is `null` for a viewer not allowed to see it;
+  `stagedCount` (per team on the clock) and `locked` (which teams on a blind
+  turn have confirmed) are always present. A team that has locked in on a blind
+  turn is sent its own choice as `yourLock`, and nobody else is.
+- **`events`** are settled choices only — `choice` (with its `team`, `action`
+  and `items`; `team` is null for what the draft took itself), `turnChange`,
+  `draftComplete`. Staging never produces an event, and neither does one team
+  locking in on a blind turn, so the subscription surface cannot leak either.
+  This is the hook a stats panel or overlay subscribes to.
 - **`error`** goes only to the socket whose command was rejected. A rejected
   command is not persisted and triggers no broadcast.
 
@@ -146,9 +168,9 @@ A room that has cleared itself out is gone for good: its links stop working and
 `GET /state` answers 404. Both windows can be set per room at creation with
 `retentionSeconds` and `abandonAfterSeconds`, which is mostly useful for testing.
 
-What is kept is the draft itself — every turn in order, which team, which heroes,
-whether the clock chose them because a captain ran out of time, and the moment
-each turn landed. Nothing else needs recording, because the account of the draft
+What is kept is the draft itself — every choice in order, which team, what they
+chose, whether the clock chose it because a captain ran out of time, and the
+moment it landed. Nothing else needs recording, because the account of the draft
 is worked out from those turns rather than written separately.
 
 `GET /api/rooms/:id/record` returns it as JSON, for keeping elsewhere:
@@ -158,23 +180,28 @@ is worked out from those turns rather than written separately.
   "roomId": "vWsxh4rNyic",
   "createdAt": 1788345973614,
   "phase": "complete",
-  "format": "Aban, Bban, Aban, Bban, Apick, Bpick x2, Apick x2, Bpick",
-  "mirrorPicks": false,
+  "game": "vainglory",
+  "teams": [{ "id": "A", "name": "Team A" }, { "id": "B", "name": "Team B" }],
+  "format": "A ban, B ban, A ban, B ban, A pick, B pick x2, A pick x2, B pick",
+  "mirror": false,
   "complete": true,
   "durationMs": 12900,
   "autoCounts": { "A": 0, "B": 1 },
   "turns": [
-    { "number": 1, "team": "A", "action": "ban", "heroes": ["ozo"], "auto": false, "at": 1788345974700, "tookMs": 1086 }
+    { "number": 1, "team": "A", "action": "ban", "items": ["ozo"], "auto": false, "at": 1788345974700, "tookMs": 1086 }
   ]
 }
 ```
+
+On a blind turn every team gets its own entry, sharing the turn's `number`, each
+timed from when that turn began. A turn nobody plays has `team: null`.
 
 Opening a finished room shows the same account on screen, above the board.
 
 ## Who is in the room
 
 Everyone on a side joins with the same code. The **first to arrive leads** —
-they are the only one who can pick and ban — and they can hand that job to a
+they are the only one who can choose for the side — and they can hand that job to a
 teammate at any time, before or during the draft. If the person leading is not
 connected, a teammate may take over; while they are connected, nobody can take
 it from them.
@@ -190,49 +217,52 @@ If the leader stays disconnected for 45 seconds the job passes to the
 longest-serving connected teammate on its own, so nobody has to notice and
 click. A teammate can take over sooner by asking.
 
-A no-show should not be able to cancel a match, so the two sides' leaders can
-agree to begin without a full room (`startAnyway`). It takes both, so neither
-side can start on the other.
+A no-show should not be able to cancel a match, so the sides' leaders can
+agree to begin without a full room (`startAnyway`). It takes every one of them,
+so no side can start on another.
 
-Teammates see their own side's staging. The opposing side never does.
+Teammates see their own side's staging. Other sides never do.
 
 ## Telling your captain what you want
 
-Most of these teams are not in voice chat, so a player who is not picking can
-mark heroes they want to play, or want banned. The person picking sees them
-gathered per hero, most-agreed first, with the names behind each — which is what
-they can actually read with a clock running.
+Plenty of teams are not in voice chat, so a player who is not choosing can mark
+things with any of the draft's actions — "pick this", "ban that". The person
+choosing sees the marks gathered per item, most-agreed first, with the names
+behind each — which is what they can actually read with a clock running.
 
 A mark is not an action: it takes no turn and spends no time, and only the
 person leading the side ever commits anything.
 
-Marks go to that side alone. Unlike a staged hero — seconds from being public
-anyway — a suggestion says what a team means to do several turns ahead, so the
-opposing side and the spectators never see them. A hero that has been banned or
-taken drops off the list, since it is noise at the moment there is least time
-for it.
+Marks go to that side alone. Unlike a staged choice — seconds from being public
+anyway — a suggestion says what a team means to do several turns ahead, so other
+sides and the spectators never see them. Anything already removed or taken drops
+off the list, since it is noise at the moment there is least time for it.
 
 ## Phases
 
 `lobby → drafting → complete`
 
 A room sits in `lobby`, clock stopped, until **every player is present and has
-said they are ready**. Both sides being full is not enough on its own: ten people
+said they are ready**. Every side being full is not enough on its own: ten people
 staring at a loading screen is exactly when somebody is still finding their
 headset. Time spent waiting costs nobody anything, and readiness can be taken
 back. Draft commands in the lobby are refused with `not_started`. `complete`
 stops the clock and clears the alarm.
 
 How many players a side waits for comes from the format — a draft where each
-team picks five heroes is played by five people — and `teamSize` on room creation
-overrides it. Set it to 1 for a draft where only the two captains turn up.
+team picks five heroes is played by five people, a map veto by one captain each
+— and `teamSize` on room creation overrides it. Set it to 1 for a draft where
+only the captains turn up.
 
 ## The clock
 
 `turnStartedAt` plus a per-team bank, and the client derives its own countdown —
-the server sends values, never a countdown. The Durable Object's alarm is set to
-the current turn's deadline and fires **whether or not anyone is connected**, so a
-draft cannot be frozen by closing a laptop.
+the server sends values, never a countdown. A turn's allowance is the room's
+`perTurnMs` unless the format gives that turn its own (`@45s`). The projection's
+clock carries `deadlines`, one per team still choosing: on a blind turn each
+team has its own, because each spends its own reserve. The Durable Object's
+alarm is set to the soonest of them and fires **whether or not anyone is
+connected**, so a draft cannot be frozen by closing a laptop.
 
 A late alarm is resolved turn by turn, each at *its own* deadline rather than all
 at the wake-up time, so a room that was evicted for two minutes produces the same

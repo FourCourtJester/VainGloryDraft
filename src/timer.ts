@@ -1,9 +1,9 @@
 /**
- * The clock a captain plays against.
+ * The clock a team plays against.
  *
- * Each turn comes with its own allowance of time. A captain who needs longer
- * than that starts eating into a reserve that belongs to them for the whole
- * draft, so thinking hard about one difficult ban costs them later rather than
+ * Each turn comes with its own allowance of time. A team that needs longer than
+ * that starts eating into a reserve that belongs to them for the whole draft,
+ * so thinking hard about one difficult choice costs them later rather than
  * stopping the game.
  *
  * The clock is never counted down. All that is remembered is when the turn
@@ -12,14 +12,17 @@
  * back sees exactly the same clock as everyone else, because it was never
  * running separately on their screen in the first place.
  *
+ * On a turn several teams play at once, they share the turn's allowance and
+ * each spends from their own reserve, so each has a deadline of their own.
+ *
  * There is no pause. If a captain disappears their time keeps running, which is
  * a decision about how tournaments should work rather than a limitation.
  */
 
-import type { Team } from "./types.js";
+import type { Team, Turn } from "./types.js";
 
 export interface TimerRules {
-  /** How long each turn gets before the team starts spending its reserve. */
+  /** How long a turn gets before the team starts spending its reserve, unless the turn says otherwise. */
   readonly perTurnMs: number;
   /** How much extra time each team has for the whole draft, to spend as they like. */
   readonly bankMs: number;
@@ -46,9 +49,14 @@ export interface TimerReading {
   readonly onBank: boolean;
 }
 
-/** Starts the clock for a new draft, with both teams' reserves untouched. */
-export function startTimer(rules: TimerRules, now: number): TimerState {
-  return { turnStartedAt: now, bank: { A: rules.bankMs, B: rules.bankMs } };
+/** How long this turn gets before anybody touches their reserve. */
+export function allowanceFor(rules: TimerRules, turn: Turn): number {
+  return turn.timeMs ?? rules.perTurnMs;
+}
+
+/** Starts the clock for a new draft, with every team's reserve untouched. */
+export function startTimer(rules: TimerRules, teams: readonly Team[], now: number): TimerState {
+  return { turnStartedAt: now, bank: Object.fromEntries(teams.map((team) => [team, rules.bankMs])) };
 }
 
 export function startTurn(timer: TimerState, now: number): TimerState {
@@ -59,13 +67,13 @@ export function startTurn(timer: TimerState, now: number): TimerState {
  * Works out where a team's clock stands at a given moment: what is left of this
  * turn, what is left of their reserve, and whether their time is up.
  */
-export function read(rules: TimerRules, timer: TimerState, team: Team, now: number): TimerReading {
-  const bank = timer.bank[team];
+export function read(allowanceMs: number, timer: TimerState, team: Team, now: number): TimerReading {
+  const bank = timer.bank[team] ?? 0;
   const elapsedMs = Math.max(0, now - timer.turnStartedAt);
-  const turnRemainingMs = Math.max(0, rules.perTurnMs - elapsedMs);
-  const bankUsedMs = Math.max(0, elapsedMs - rules.perTurnMs);
+  const turnRemainingMs = Math.max(0, allowanceMs - elapsedMs);
+  const bankUsedMs = Math.max(0, elapsedMs - allowanceMs);
   const bankRemainingMs = Math.max(0, bank - bankUsedMs);
-  const expiresAt = timer.turnStartedAt + rules.perTurnMs + bank;
+  const expiresAt = timer.turnStartedAt + allowanceMs + bank;
 
   return {
     elapsedMs,
@@ -79,23 +87,19 @@ export function read(rules: TimerRules, timer: TimerState, team: Team, now: numb
 }
 
 /**
- * Ends a turn: takes any overrun out of that team's reserve and starts the next
- * turn's allowance running.
+ * Takes whatever a team overran by out of their reserve, at the moment they
+ * settled their part of the turn. The turn itself carries on until everybody
+ * playing it has.
  */
-export function settleTurn(
-  rules: TimerRules,
-  timer: TimerState,
-  team: Team,
-  now: number,
-): TimerState {
-  const { bankRemainingMs } = read(rules, timer, team, now);
-  return { turnStartedAt: now, bank: { ...timer.bank, [team]: bankRemainingMs } };
+export function charge(allowanceMs: number, timer: TimerState, team: Team, now: number): TimerState {
+  const { bankRemainingMs } = read(allowanceMs, timer, team, now);
+  return { ...timer, bank: { ...timer.bank, [team]: bankRemainingMs } };
 }
 
 /**
- * The moment this turn runs out, so the room can arrange to wake itself up and
- * choose on the captain's behalf even if nobody is watching.
+ * The moment a team's time runs out this turn, so the room can arrange to wake
+ * itself up and choose on their behalf even if nobody is watching.
  */
-export function nextAlarmAt(rules: TimerRules, timer: TimerState, team: Team): number {
-  return timer.turnStartedAt + rules.perTurnMs + timer.bank[team];
+export function deadline(allowanceMs: number, timer: TimerState, team: Team): number {
+  return timer.turnStartedAt + allowanceMs + (timer.bank[team] ?? 0);
 }

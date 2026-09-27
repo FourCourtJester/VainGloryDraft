@@ -2,151 +2,157 @@
 
 ![Vainglory Draft](client/public/logo-wordmark.png)
 
-A tool for running custom pick/ban drafts for Vainglory, aimed at tournament
-organisers and their captains. 5v5 and 3v3 run on the same engine.
+A drafting engine: pick, ban and veto, for any game, run live in a room with a
+clock. Tournament organisers make a room, hand every team a link, and the draft
+runs itself — the clock included, whether or not anybody is watching.
 
-The design is in [docs/HANDOFF.md](docs/HANDOFF.md). What is built: a pure draft
-engine, a Cloudflare Durable Object holding one room each with an authoritative
-clock, and a React client. You can create a room, hand out three links, and run
-a draft end to end.
+It started as a Vainglory draft tool and is now game-agnostic. What a game's
+draft looks like — its teams, what its turns do, its formats, what can be
+drafted — is data in a **pack** under `games/`. Two ship: **Vainglory** (5v5
+and 3v3 hero drafts) and a **Counter-Strike 2** map veto, which is there to
+prove the point. The Vainglory-only version is kept on the `archive/vainglory`
+branch. The name will change later.
 
 ## The one idea
 
-A draft is a single ordered list of turns. Bans and picks are not two systems:
+A draft is a single ordered list of turns, written on one line:
 
-```ts
-const script = parseScript("Aban, Bban, Apick, Bpick x2, Apick x2, Bpick");
+```
+A ban, B ban, A pick, B pick x2 @45s, A+B ban, remaining pick
 ```
 
-5v5, 3v3 and any custom order are different arrays, nothing else. Everything the
-engine reports — expected picks per team, minimum pool size, whose turn it is —
-is *derived* from the script. Nothing assumes "five picks a side".
+Team A bans; team B bans; A picks one; B picks two together, with forty-five
+seconds to do it; both teams ban blind at the same time; and whatever is left is
+taken. A hero draft, a map veto and a format a tournament invents next month are
+different lines, nothing else. Everything the engine reports — whose turn it
+is, what each team ends up with, how big the pool has to be — is worked out from
+the line. Nothing assumes two teams, five picks, or that "ban" is a word.
+
+What each action does comes from the game: an action either **removes** the
+thing for everybody (a ban, a veto, a strike) or **takes** it for the team that
+chose it (a pick). How to write a pack, and the notation in full, are in
+[docs/GAMES.md](docs/GAMES.md).
 
 ## What is here
 
 | Module | Responsibility |
 |---|---|
-| `src/types.ts` | `Team`, `Action`, `Turn`, `TurnScript`, `Hero`, `DraftConfig`, `DraftState` |
-| `src/script.ts` | Script validation, derived totals, `parseScript`/`formatScript` notation |
-| `src/config.ts` | Room defaults: mirror picks off, auto-fill random |
-| `src/engine.ts` | The engine: current turn, legal heroes, staging, commit, timeout resolution |
-| `src/record.ts` | The account of a finished draft, derived from its turns |
-| `src/timer.ts` | Per-turn clock plus reserve bank. Pure: computes, never counts down |
-| `src/events.ts` | `pick \| ban \| turnChange \| draftComplete` and a subscription bus |
-| `src/projection.ts` | Per-token filtered views of the room |
-| `src/presets.ts` | Named scripts, including the default `vg-5v5-standard` |
-| `src/heroes.ts`, `data/heroes.json` | Static roster, checked in, never fetched at runtime |
-| `src/room/` | Room: engine + clock + tokens + connections. No Cloudflare imports |
+| `src/types.ts` | `Team`, `ActionDefinition`, `Turn`, `TurnScript`, `DraftConfig`, `DraftState` |
+| `src/script.ts` | The notation, validation, and everything derived from a format |
+| `src/engine.ts` | The rules: whose turn, what is legal, staging, locking in, blind reveals, timeouts |
+| `src/timer.ts` | Per-turn clock plus a reserve per team. Pure: computes, never counts down |
+| `src/events.ts` | `choice \| turnChange \| draftComplete` and a subscription bus |
+| `src/record.ts` | The account of a finished draft, derived from its choices |
+| `src/projection.ts` | What each person in a room is allowed to see |
+| `src/config.ts` | Room defaults: mirrors off, auto-fill random |
+| `src/game.ts` | What a pack is, and the checks it must pass to load |
+| `src/games.ts` | The one place that knows which packs exist |
+| `games/<id>/` | The packs: `game.json` by hand, `catalog.json` by the import scripts |
+| `src/room/` | Room: engine + clock + codes + connections. No Cloudflare imports, no game |
 | `src/room/roster.ts` | Who is on each side, who leads, and who has said they are ready |
 | `src/room/suggestions.ts` | What a side has asked its own captain for |
-| `src/room/names.ts` | The name a player is offered before they type one |
 | `worker/` | Durable Object and Worker routes — a thin adapter over `Room` |
 | `worker/gatekeeper.ts` | One per address, so an open site cannot be scripted at |
 | `client/` | React + Vite SPA: the create screen and the draft room |
+| `scripts/import-catalog.mjs` | Takes a roster export and writes a game's catalog |
+| `scripts/import-portraits.mjs` | Squares, shrinks and self-hosts a folder of pictures |
 | `scripts/make-logo.mjs` | Draws the mark and every icon size — see [docs/BRAND.md](docs/BRAND.md) |
-| `scripts/import-heroes.mjs` | Takes a vgna.net export and writes `data/heroes.json` |
-| `scripts/import-portraits.mjs` | Squares, shrinks and self-hosts a folder of hero art |
 
 ```
 npm install
-npm test          # 239 tests
+npm test          # 297 tests
 npm run typecheck
 npm run dev       # builds the client, then wrangler dev on :8787
-npm run smoke     # protocol end-to-end against a running dev worker
+npm run smoke     # the protocol end to end against a running dev worker
 npm run ui-check  # a real browser, a squad a side, each in its own window
 ```
 
-Open http://127.0.0.1:8787, create a room, and open the two captain links in
-separate windows.
+Open http://127.0.0.1:8787, choose a game, create a room, and open two team
+links in separate windows.
 
 `smoke` and `ui-check` need a worker already running, so CI runs the first
 three only.
 
 The protocol — routes, messages, phases — is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
+## Kinds of turn
+
+- **One team.** They choose, confirm, and it is done. `x2` means two chosen
+  together, on one clock, with one confirm.
+- **Several teams at once, blind** — `A+B ban`. Each chooses without seeing the
+  others and nothing is shown until the last confirms or runs out of time; then
+  it is all revealed together. Nobody outside a team sees its choice before
+  that, spectators included, since anybody can open a spectator link. Everyone
+  can see who has locked in.
+- **Nobody** — `remaining pick`. The draft takes what is left the moment it gets
+  there: a map veto's decider.
+
+Any turn can carry its own time (`@45s`) in place of the room's usual one.
+
 ## Design decisions the code enforces
 
-- **Nothing is committed until confirm.** Click a hero to stage, click again to
-  unstage, then Accept. A `count: 2` turn is one confirm, not two.
+- **Nothing is committed until confirm.** Click to stage, click again to
+  unstage, then confirm. A `count: 2` turn is one confirm, not two.
 - **Timeouts are deterministic.** `autoFillSelection` keeps whatever was staged
   and fills only the remainder, seeded from the room seed plus the turn index, so
   any auto-action can be replayed from the room log and argued about with facts.
-  Random is the rule for every timeout, not just partially staged turns — see
-  [docs/DECISIONS.md](docs/DECISIONS.md).
+  Random is the rule for every timeout — see [docs/DECISIONS.md](docs/DECISIONS.md).
 - **No pause.** The clock is a pure function of `turnStartedAt` and each team's
-  bank. A disconnect burns time like any other silence; the projection carries a
-  per-captain connection indicator so the room can see it and decide for itself.
-- **Staging visibility.** The captain on the clock sees their own staging and
-  spectators see the active team's. The opposing captain sees only a slot count.
-- **Mirror picks are per-room**, default off. A team can never pick the same hero
-  twice regardless, and a picked hero can never be banned afterwards.
+  reserve. A disconnect burns time like any other silence; the room shows who is
+  connected and leaves the decision to the people running it.
+- **Staging visibility.** A team sees its own staging. On a single-team turn
+  spectators see it too; nobody else ever does.
+- **Mirrors are per room**, defaulting to the game's rule. A team can never take
+  the same thing twice regardless, and something taken can never be removed
+  afterwards.
 - **The engine does not know consumers exist.** Events are derived by comparing
   two states (`diffEvents`), so a stats panel, an overlay or a webhook is a new
   subscriber and never surgery on the engine.
+- **The room never reads a pack.** It is handed its teams, actions, format and
+  pool when it is made and keeps a copy, so editing a pack cannot change a draft
+  in progress, and the room can run any game.
 - **Each side gets a short code, spectators get a link.** A code is six
   characters that can be read out over voice, carried in a link for one tap, or
-  typed. Wrong codes are counted and the room stops answering after a handful,
-  so something that short cannot simply be guessed at.
-- **A whole squad joins, and one of them picks.** Everyone on a team uses the
+  typed. Wrong codes are counted and the room stops answering after a handful.
+- **A whole squad joins, and one of them chooses.** Everyone on a team uses the
   same code; the first to arrive leads and can hand that job to a teammate, or
-  have it taken over if they drop. Teammates watch their own side deliberate;
-  the opposing side cannot.
+  have it taken over if they drop.
 - **The draft starts on a ready check**, not on a connection. Every player has to
-  be present and confirm, so nobody's clock burns while their team is still
-  arriving — or both sides' leaders can agree to begin short-handed, for a
-  no-show.
-- **Players tell their captain what they want.** Teams are often not in voice
-  chat, so anyone who is not picking can mark heroes to play or to ban; the
-  captain reads them most-agreed first and still makes every decision. Marks are
-  never shown to the other side.
-- **Names arrive already filled in**, and the same person is suggested the same
-  name every time. Identity is an id, never a name, and never a device
-  fingerprint — see [docs/IDENTITY.md](docs/IDENTITY.md).
-- **A room stores the resolved script array, not a preset id.** Editing a preset
-  cannot change a draft in progress.
-- **A finished draft is kept and can be read back.** Every turn is recorded in
-  order, with the time it landed and whether the clock chose it, so opening the
-  room later shows how the draft actually went rather than just its result.
+  be present and confirm — or every side's leader can agree to begin
+  short-handed, for a no-show.
+- **Players tell their captain what they want**, with any of the draft's
+  actions. The captain reads the marks most-agreed first and still makes every
+  decision. Marks are never shown to another side.
+- **Names arrive already filled in**, and identity is an id, never a name or a
+  device fingerprint — see [docs/IDENTITY.md](docs/IDENTITY.md).
+- **A finished draft is kept and can be read back**, choice by choice, with when
+  each landed and whether the clock chose it.
 - **A room clears itself out.** A finished draft is kept a month; a room nobody
-  ever played in goes six hours after the last sign of anybody in it. The alarm
-  that runs the turn clock does the sweeping, so nothing has to be scheduled and
-  storage does not grow without limit.
-- **Anybody may start a draft.** Creation is open, because the tool is not meant
-  to belong to one org. Every address gets an allowance — five rooms in a burst,
-  one back every twenty seconds, a hundred a day — so an open site cannot be
-  scripted at. A tournament's own bot holds a key that skips the limit, and a
-  deployment that wants the door shut entirely can have that too.
+  ever played in goes six hours after the last sign of anybody in it.
+- **Anybody may start a draft.** Every address gets an allowance — five rooms in
+  a burst, one back every twenty seconds, a hundred a day. A tournament's own
+  bot holds a key that skips it.
 
-## The formats
+## The packs
 
-`vg-5v5-standard`, the script a room gets if the organiser picks nothing:
-
-```
-Aban, Bban, Aban, Bban, Apick, Bpick x2, Apick x2, Bpick x2, Apick x2, Bpick
-```
-
-Two bans each, then a 1-2-2-2-2-1 snake. Five picks a side.
-`vg-3v3-standard` is the same order with the snake cut short at three a side,
-which is what "the same as the fives, but three" means.
-
-`x2` marks a **double pick**: the team choosing twice in a row does both in one
-turn, on one clock. They stage two heroes and lock them in together, and may
-change either until they do.
-
-## Waiting on data
-
-`data/heroes.json` carries 58 hero names and 57 portraits, self-hosted. Roles
-are still `[]` and the file is still marked `verified: false` — the UI will not
-offer a role filter over data it cannot trust. A vgna.net role export drops
-straight in:
+**Vainglory.** `vg-5v5-standard` is two bans each, then a 1-2-2-2-2-1 snake;
+`vg-3v3-standard` is the same cut short at three a side. A double pick is one
+turn. 58 heroes, 57 with self-hosted portraits. Roles are known as a vocabulary
+— Captain, Jungle, Lane — but no hero has one yet, so no role filter is offered:
+a filter over guessed data is worse than none. A per-hero export drops straight
+in:
 
 ```
-npm run import-heroes -- vgna-heroes.json          # names, roles, icons from JSON
-node scripts/import-portraits.mjs "~/Hero Portraits"  # a folder of pictures
+npm run import-catalog -- vainglory vgna-heroes.json --dry-run
+node scripts/import-portraits.mjs vainglory "~/Hero Portraits"
 ```
 
-See [docs/HERO_DATA.md](docs/HERO_DATA.md). Corpus has no portrait and is drawn
-as a name. Both draft formats are in and confirmed.
+See [docs/HERO_DATA.md](docs/HERO_DATA.md).
+
+**Counter-Strike 2.** Best-of-one and best-of-three vetoes over seven maps, each
+ending in a decider nobody picks. The map list is an example and the orders are
+the common Valve Major shape, both marked unconfirmed: check them against a real
+rulebook before a real match.
 
 ## Where the logic lives
 
@@ -159,46 +165,35 @@ tested in milliseconds.
 The Durable Object owns only sockets, storage and the alarm. That alarm is the
 reason for the whole choice of platform: it fires **whether or not anyone is
 connected**, so a draft cannot be frozen by closing a laptop, and a room evicted
-mid-draft wakes up and resolves each missed turn at its own deadline rather than
-all at once.
-
-A room sits in a lobby, clock stopped, until every player has arrived and
-confirmed they are ready.
+mid-draft wakes up and resolves each missed deadline at the moment it passed.
 
 ## The client
 
 A React + Vite SPA, served by the same Worker. It renders what the server sends
-and asks for things; it decides nothing. In particular it never computes
-legality — a hero is clickable because the server said it was selectable — and
-it draws the countdown from `expiresAt` against the server's own clock, which
-each `state` message carries, so a viewer with a fast laptop sees the same time
-as the captain beside them.
+and asks for things; it decides nothing. The rules — teams, actions, what is
+selectable — arrive with every update; the game's catalog supplies only names
+and pictures. The countdown is drawn from each team's deadline against the
+server's own clock, so a viewer with a fast laptop sees the same time as the
+captain beside them.
 
-Auto-resolved actions are tagged `auto` wherever they appear, because a hero the
-clock chose must never look like one a captain chose.
+Auto-resolved choices are tagged `auto` wherever they appear, because something
+the clock chose must never look like something a captain chose.
 
 ## Known gaps
 
-Things a tournament organiser would hit, in rough order of how much they matter:
-
-- **No hero roles yet.** Portraits have arrived and are in; roles have not, so
-  the pool cannot be filtered by one. Waiting on the vgna.net export, which the
-  importer is ready for.
+- **Branding still says Vainglory.** The name, logo and wordmark are the old
+  tool's, pending a rename.
+- **Packs are files in the repo.** Adding a game is a pull request, not a form.
+  An organiser can already write their own order when making a room.
+- **No per-hero roles for Vainglory yet** — waiting on VGNA.
 - **No list of past drafts.** A draft reopens from its own link, but nothing
-  enumerates them, and durable objects cannot be listed — so browsing them needs
-  an index written to as drafts finish. It also needs deciding whose history a
-  person may see, which is an organiser question before it is a technical one.
-- **No organiser controls.** No remake, no undo, no pause. Deliberate for now: a
-  remake is a new room, and the other two need a rule about who may call them,
-  which is a tournament's decision rather than this tool's.
-- **Open CORS.** Anything may call the API from anywhere. Fine while the only
-  reader is the app itself and a bot, worth narrowing if that changes.
-- **Never deployed.** `wrangler deploy` has not been run — everything here was
-  verified against `wrangler dev` locally. See [docs/DEPLOYING.md](docs/DEPLOYING.md).
+  enumerates them; that needs an index and a decision about whose history a
+  person may see.
+- **No organiser controls.** No remake, no undo, no pause.
+- **Open CORS.** Worth narrowing if the API grows readers beyond the app and a
+  bot.
+- **Never deployed.** Everything here was verified against `wrangler dev`
+  locally. See [docs/DEPLOYING.md](docs/DEPLOYING.md).
 
-## Next
-
-Portraits and role data, once the export arrives; deploying it somewhere public;
-and a list of past drafts, once it is settled who should be able to see whose.
 Settled questions are recorded in [docs/DECISIONS.md](docs/DECISIONS.md), and
 what is still open is at the end of it.

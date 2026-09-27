@@ -1,8 +1,8 @@
 /**
  * Who is in the room.
  *
- * A draft is played by two whole teams, not two lone captains. Everybody on a
- * side joins with the same team code, and the first of them to arrive leads —
+ * A draft is played by whole teams, not lone captains. Everybody on a side
+ * joins with the same team code, and the first of them to arrive leads —
  * they are the one who actually picks and bans. If that is the wrong person, the
  * lead can be handed to a teammate, which is quicker than everyone leaving and
  * rejoining in a different order.
@@ -34,8 +34,13 @@ export interface Roster {
   readonly teamSize: number;
 }
 
-export function emptyRoster(teamSize: number): Roster {
-  return { members: [], leaders: { A: null, B: null }, teamSize };
+export function emptyRoster(teams: readonly Team[], teamSize: number): Roster {
+  return { members: [], leaders: Object.fromEntries(teams.map((team) => [team, null])), teamSize };
+}
+
+/** Every team in the room, in the order they were defined. */
+export function teamsOf(roster: Roster): readonly Team[] {
+  return Object.keys(roster.leaders);
 }
 
 export function teamMembers(roster: Roster, team: Team): readonly Member[] {
@@ -47,12 +52,12 @@ export function findMember(roster: Roster, id: string): Member | undefined {
 }
 
 export function isLeader(roster: Roster, id: string): boolean {
-  return roster.leaders.A === id || roster.leaders.B === id;
+  return Object.values(roster.leaders).includes(id);
 }
 
 export function leaderOf(roster: Roster, team: Team): Member | undefined {
   const id = roster.leaders[team];
-  return id === null ? undefined : findMember(roster, id);
+  return id === null || id === undefined ? undefined : findMember(roster, id);
 }
 
 /**
@@ -63,6 +68,9 @@ export function leaderOf(roster: Roster, team: Team): Member | undefined {
  * place mid-draft.
  */
 export function join(roster: Roster, member: { id: string; name: string; team: Team }, now: number): Roster {
+  // Nobody can join a team the room does not have. The room checks the code
+  // before it gets this far, so this only ever catches a mistake.
+  if (!(member.team in roster.leaders)) return roster;
   const existing = findMember(roster, member.id);
   if (existing !== undefined) {
     // A name can change on the way back in; the team cannot.
@@ -119,9 +127,9 @@ export function passOnAbandonedLead(
   graceMs: number,
 ): Roster | null {
   let next = roster;
-  for (const team of ["A", "B"] as const) {
+  for (const team of teamsOf(next)) {
     const id = next.leaders[team];
-    if (id === null || connected.has(id)) continue;
+    if (id === null || id === undefined || connected.has(id)) continue;
     const leader = findMember(next, id);
     if (leader === undefined || now - leader.lastSeenAt < graceMs) continue;
 
@@ -160,13 +168,13 @@ export function claimLead(roster: Roster, claimant: string, connected: ReadonlyS
   if (member === undefined) return null;
   const current = roster.leaders[member.team];
   if (current === claimant) return null;
-  if (current !== null && connected.has(current)) return null;
+  if (current !== null && current !== undefined && connected.has(current)) return null;
   return { ...roster, leaders: { ...roster.leaders, [member.team]: claimant } };
 }
 
-/** True when both sides have every player they are waiting for. */
+/** True when every side has every player it is waiting for. */
 export function everyoneHere(roster: Roster): boolean {
-  return teamMembers(roster, "A").length >= roster.teamSize && teamMembers(roster, "B").length >= roster.teamSize;
+  return teamsOf(roster).every((team) => teamMembers(roster, team).length >= roster.teamSize);
 }
 
 /** True when the room is full and every one of them has said they are ready. */

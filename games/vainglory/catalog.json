@@ -1,0 +1,493 @@
+{
+  "note": "Hero names from the design handoff plus community roster listings, not yet checked against vaingloryfire.com. Roles are deliberately empty: they must come from a source worth trusting, never be guessed. See docs/HERO_DATA.md.",
+  "source": "Design handoff plus community roster listings; not yet verified against vaingloryfire.com.",
+  "filters": [
+    {
+      "key": "role",
+      "label": "Role",
+      "values": [
+        "Captain",
+        "Jungle",
+        "Lane"
+      ],
+      "verified": false,
+      "aliases": [
+        "herorole",
+        "position",
+        "class"
+      ]
+    }
+  ],
+  "items": [
+    {
+      "id": "adagio",
+      "name": "Adagio",
+      "image": "/games/vainglory/adagio.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "alpha",
+      "name": "Alpha",
+      "image": "/games/vainglory/alpha.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "amael",
+      "name": "Amael",
+      "image": "/games/vainglory/amael.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "anka",
+      "name": "Anka",
+      "image": "/games/vainglory/anka.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "ardan",
+      "name": "Ardan",
+      "image": "/games/vainglory/ardan.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "baptiste",
+      "name": "Baptiste",
+      "image": "/games/vainglory/baptiste.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "baron",
+      "name": "Baron",
+      "image": "/games/vainglory/baron.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "blackfeather",
+      "name": "Blackfeather",
+      "image": "/games/vainglory/blackfeather.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "caine",
+      "name": "Caine",
+      "image": "/games/vainglory/caine.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "catherine",
+      "name": "Catherine",
+      "image": "/games/vainglory/catherine.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "celeste",
+      "name": "Celeste",
+      "image": "/games/vainglory/celeste.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "churnwalker",
+      "name": "Churnwalker",
+      "image": "/games/vainglory/churnwalker.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "corpus",
+      "name": "Corpus",
+      "image": null,
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "flicker",
+      "name": "Flicker",
+      "image": "/games/vainglory/flicker.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "fortress",
+      "name": "Fortress",
+      "image": "/games/vainglory/fortress.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "glaive",
+      "name": "Glaive",
+      "image": "/games/vainglory/glaive.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "grace",
+      "name": "Grace",
+      "image": "/games/vainglory/grace.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "grumpjaw",
+      "name": "Grumpjaw",
+      "image": "/games/vainglory/grumpjaw.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "gwen",
+      "name": "Gwen",
+      "image": "/games/vainglory/gwen.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "idris",
+      "name": "Idris",
+      "image": "/games/vainglory/idris.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "inara",
+      "name": "Inara",
+      "image": "/games/vainglory/inara.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "ishtar",
+      "name": "Ishtar",
+      "image": "/games/vainglory/ishtar.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "joule",
+      "name": "Joule",
+      "image": "/games/vainglory/joule.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "karas",
+      "name": "Karas",
+      "image": "/games/vainglory/karas.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "kensei",
+      "name": "Kensei",
+      "image": "/games/vainglory/kensei.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "kestrel",
+      "name": "Kestrel",
+      "image": "/games/vainglory/kestrel.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "kinetic",
+      "name": "Kinetic",
+      "image": "/games/vainglory/kinetic.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "koshka",
+      "name": "Koshka",
+      "image": "/games/vainglory/koshka.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "krul",
+      "name": "Krul",
+      "image": "/games/vainglory/krul.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "lance",
+      "name": "Lance",
+      "image": "/games/vainglory/lance.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "leo",
+      "name": "Leo",
+      "image": "/games/vainglory/leo.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "lorelai",
+      "name": "Lorelai",
+      "image": "/games/vainglory/lorelai.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "lyra",
+      "name": "Lyra",
+      "image": "/games/vainglory/lyra.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "magnus",
+      "name": "Magnus",
+      "image": "/games/vainglory/magnus.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "malene",
+      "name": "Malene",
+      "image": "/games/vainglory/malene.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "miho",
+      "name": "Miho",
+      "image": "/games/vainglory/miho.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "ozo",
+      "name": "Ozo",
+      "image": "/games/vainglory/ozo.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "petal",
+      "name": "Petal",
+      "image": "/games/vainglory/petal.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "phinn",
+      "name": "Phinn",
+      "image": "/games/vainglory/phinn.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "reim",
+      "name": "Reim",
+      "image": "/games/vainglory/reim.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "reza",
+      "name": "Reza",
+      "image": "/games/vainglory/reza.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "ringo",
+      "name": "Ringo",
+      "image": "/games/vainglory/ringo.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "rona",
+      "name": "Rona",
+      "image": "/games/vainglory/rona.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "samuel",
+      "name": "Samuel",
+      "image": "/games/vainglory/samuel.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "san-feng",
+      "name": "San Feng",
+      "image": "/games/vainglory/san-feng.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "saw",
+      "name": "SAW",
+      "image": "/games/vainglory/saw.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "shin",
+      "name": "Shin",
+      "image": "/games/vainglory/shin.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "silvernail",
+      "name": "Silvernail",
+      "image": "/games/vainglory/silvernail.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "skaarf",
+      "name": "Skaarf",
+      "image": "/games/vainglory/skaarf.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "skye",
+      "name": "Skye",
+      "image": "/games/vainglory/skye.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "taka",
+      "name": "Taka",
+      "image": "/games/vainglory/taka.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "tony",
+      "name": "Tony",
+      "image": "/games/vainglory/tony.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "varya",
+      "name": "Varya",
+      "image": "/games/vainglory/varya.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "viola",
+      "name": "Viola",
+      "image": "/games/vainglory/viola.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "vox",
+      "name": "Vox",
+      "image": "/games/vainglory/vox.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "warhawk",
+      "name": "Warhawk",
+      "image": "/games/vainglory/warhawk.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "yates",
+      "name": "Yates",
+      "image": "/games/vainglory/yates.webp",
+      "tags": {
+        "role": []
+      }
+    },
+    {
+      "id": "ylva",
+      "name": "Ylva",
+      "image": "/games/vainglory/ylva.webp",
+      "tags": {
+        "role": []
+      }
+    }
+  ],
+  "portraits": {
+    "count": 57,
+    "size": 192,
+    "source": "Hero Portraits",
+    "note": "No portrait yet for: corpus. Those heroes are drawn as a name."
+  }
+}

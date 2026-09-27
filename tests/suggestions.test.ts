@@ -3,8 +3,8 @@ import { byMember, forTeam, forget, toggle } from "../src/room/suggestions.js";
 import type { Suggestion } from "../src/room/suggestions.js";
 
 const side = (memberId: string): "A" | "B" => (memberId.startsWith("b") ? "B" : "A");
-const want = (memberId: string, heroId: string): Suggestion => ({ memberId, team: side(memberId), heroId, intent: "want" });
-const ban = (memberId: string, heroId: string): Suggestion => ({ memberId, team: side(memberId), heroId, intent: "ban" });
+const want = (memberId: string, itemId: string): Suggestion => ({ memberId, team: side(memberId), itemId, intent: "pick" });
+const ban = (memberId: string, itemId: string): Suggestion => ({ memberId, team: side(memberId), itemId, intent: "ban" });
 const names: Record<string, string> = { a1: "Ana", a2: "Ali", a3: "Ash", b1: "Ben" };
 const nameOf = (id: string): string => names[id] ?? id;
 const always = (): boolean => true;
@@ -44,27 +44,28 @@ describe("what a captain reads", () => {
 
   it("gathers a side's marks per hero", () => {
     const forA = forTeam(marks, "A", nameOf, always);
-    expect(forA.find((h) => h.heroId === "ozo")?.want).toEqual(["Ana", "Ali", "Ash"]);
-    expect(forA.find((h) => h.heroId === "saw")?.ban).toEqual(["Ali", "Ash"]);
+    expect(forA.find((h) => h.itemId === "ozo")?.by.pick).toEqual(["Ana", "Ali", "Ash"]);
+    expect(forA.find((h) => h.itemId === "saw")?.by.ban).toEqual(["Ali", "Ash"]);
+    expect(forA.find((h) => h.itemId === "ozo")?.total).toBe(3);
   });
 
   it("puts what most of them agree on first", () => {
-    expect(forTeam(marks, "A", nameOf, always).map((h) => h.heroId)).toEqual(["ozo", "saw", "krul"]);
+    expect(forTeam(marks, "A", nameOf, always).map((h) => h.itemId)).toEqual(["ozo", "saw", "krul"]);
   });
 
   it("never mixes in the other side's", () => {
     const forA = forTeam(marks, "A", nameOf, always);
-    expect(forA.some((h) => h.heroId === "lyra")).toBe(false);
-    expect(forTeam(marks, "B", nameOf, always).map((h) => h.heroId)).toEqual(["lyra"]);
+    expect(forA.some((h) => h.itemId === "lyra")).toBe(false);
+    expect(forTeam(marks, "B", nameOf, always).map((h) => h.itemId)).toEqual(["lyra"]);
   });
 
   it("drops heroes nobody can have any more", () => {
-    const available = (heroId: string): boolean => heroId !== "ozo";
-    expect(forTeam(marks, "A", nameOf, available).some((h) => h.heroId === "ozo")).toBe(false);
+    const available = (itemId: string): boolean => itemId !== "ozo";
+    expect(forTeam(marks, "A", nameOf, available).some((h) => h.itemId === "ozo")).toBe(false);
   });
 
   it("names the people, since a bare number tells a captain nothing", () => {
-    expect(forTeam([want("a1", "ozo")], "A", nameOf, always)[0]?.want).toEqual(["Ana"]);
+    expect(forTeam([want("a1", "ozo")], "A", nameOf, always)[0]?.by.pick).toEqual(["Ana"]);
   });
 });
 

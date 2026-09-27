@@ -2,7 +2,7 @@
   "name": "vainglory-draft",
   "version": "0.0.1",
   "private": true,
-  "description": "Custom pick/ban draft tool for Vainglory (5v5 and 3v3).",
+  "description": "A drafting engine: pick, ban and veto for any game, defined by data packs.",
   "license": "MIT",
   "type": "module",
   "main": "./src/index.ts",
@@ -16,7 +16,8 @@
     "build": "vite build --config client/vite.config.ts client",
     "dev:client": "vite --config client/vite.config.ts client",
     "ui-check": "node scripts/ui-check.mjs",
-    "import-heroes": "node scripts/import-heroes.mjs"
+    "import-catalog": "node scripts/import-catalog.mjs",
+    "import-portraits": "node scripts/import-portraits.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260902.1",

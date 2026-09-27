@@ -1,14 +1,19 @@
 /*
  * The look of the draft room.
  *
- * A broadcast HUD rather than a web form: a dark ground, two faction colours
- * that never cross sides, condensed uppercase for anything read at a glance,
- * and a plain face for anything read properly. Corners are barely rounded and
- * depth comes from thin lit edges rather than soft shadows, so a hero portrait
- * stays the brightest thing on the screen.
+ * A broadcast HUD rather than a web form: a dark ground, a colour for each
+ * team that never crosses sides, condensed uppercase for anything read at a
+ * glance, and a plain face for anything read properly. Corners are barely
+ * rounded and depth comes from thin lit edges rather than soft shadows, so a
+ * portrait stays the brightest thing on the screen.
  *
- * The two faction colours are the only strong colours here. Everything else is
- * a step on one grey ramp, which is what keeps a screen this dense readable.
+ * The team colours are the only strong colours here. Everything else is a step
+ * on one grey ramp, which is what keeps a screen this dense readable.
+ *
+ * A team's colour comes from its place in the draft, not its name: whatever is
+ * about a team carries a slot class, `t0` for the first team and so on, and
+ * everything inside reads `--side`. That way a game with other team names, or
+ * more teams, needs no new rules here.
  */
 
 :root {
@@ -25,14 +30,19 @@
   --muted: #8896a8;
   --faint: #5d6a7d;
 
-  /* Team A is the blue side and team B the red, in the draft and in the badge.
-     Nothing else on the screen may borrow either one. */
-  --a: #00d4ff;
-  --b: #ff3b5c;
-  --a-glow: rgba(0, 212, 255, 0.35);
-  --b-glow: rgba(255, 59, 92, 0.35);
-  --a-wash: rgba(0, 212, 255, 0.12);
-  --b-wash: rgba(255, 59, 92, 0.12);
+  /* The first team is the blue side and the second the red, in the draft and in
+     the badge. Nothing else on the screen may borrow either one. A third and
+     fourth team, where a game has them, get colours of their own. */
+  --t0: #00d4ff;
+  --t1: #ff3b5c;
+  --t2: #a78bfa;
+  --t3: #ff9f43;
+  --t0-glow: rgba(0, 212, 255, 0.35);
+  --t1-glow: rgba(255, 59, 92, 0.35);
+  --t2-glow: rgba(167, 139, 250, 0.35);
+  --t3-glow: rgba(255, 159, 67, 0.35);
+  /* The app's own accent, for things that belong to no team: focus rings, inputs. */
+  --a: var(--t0);
 
   /* Reserved for the state of the room itself rather than for either side. */
   --gold: #fbbf24;
@@ -69,12 +79,20 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 
 :focus-visible { outline: 2px solid var(--a); outline-offset: 2px; }
 
+/* Anything about one team carries its slot, and reads its colour from --side. */
+.t0 { --side: var(--t0); --side-glow: var(--t0-glow); }
+.t1 { --side: var(--t1); --side-glow: var(--t1-glow); }
+.t2 { --side: var(--t2); --side-glow: var(--t2-glow); }
+.t3 { --side: var(--t3); --side-glow: var(--t3-glow); }
+/* A turn several teams play blind belongs to none of them. */
+.blind { --side: var(--gold); --side-glow: rgba(251, 191, 36, 0.3); }
+
 /* ── room shell ─────────────────────────────────────────────────────────── */
 
 .room {
-  /* Whichever side is on the clock lends its colour to everything that acts on
-     their behalf — the hero they are considering, the button that locks it in.
-     A side's colour never appears in the other side's controls. */
+  /* Whichever side is choosing lends its colour to everything that acts on
+     their behalf — what they are considering, the button that locks it in. A
+     side's colour never appears in another side's controls. */
   --active: var(--muted);
   --active-glow: transparent;
   max-width: 1500px;
@@ -96,8 +114,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   border-radius: var(--r-lg);
 }
 
-.room.side-A { --active: var(--a); --active-glow: var(--a-glow); }
-.room.side-B { --active: var(--b); --active-glow: var(--b-glow); }
+.room.act-0 { --active: var(--t0); --active-glow: var(--t0-glow); }
+.room.act-1 { --active: var(--t1); --active-glow: var(--t1-glow); }
+.room.act-2 { --active: var(--t2); --active-glow: var(--t2-glow); }
+.room.act-3 { --active: var(--t3); --active-glow: var(--t3-glow); }
 
 .identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .identity .mark { display: block; flex: none; }
@@ -143,8 +163,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   background: var(--surface-2);
   color: var(--faint);
 }
-.presence.connected:first-child { color: var(--a); border-color: color-mix(in srgb, var(--a) 50%, transparent); }
-.presence.connected:nth-child(2) { color: var(--b); border-color: color-mix(in srgb, var(--b) 50%, transparent); }
+.presence.connected { color: var(--side); border-color: color-mix(in srgb, var(--side) 50%, transparent); }
 
 .socket {
   font-family: var(--display);
@@ -179,10 +198,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   position: absolute;
   inset: 0 0 auto 0;
   height: 2px;
-  background: var(--faint);
+  background: var(--side, var(--faint));
+  box-shadow: 0 0 16px var(--side-glow, transparent);
 }
-.turn.side-A::before { background: var(--a); box-shadow: 0 0 16px var(--a-glow); }
-.turn.side-B::before { background: var(--b); box-shadow: 0 0 16px var(--b-glow); }
 
 .turn-label {
   font-size: 26px;
@@ -190,9 +208,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   letter-spacing: 0.05em;
   text-transform: uppercase;
   line-height: 1;
+  color: var(--side, var(--text));
 }
-.turn.side-A .turn-label { color: var(--a); }
-.turn.side-B .turn-label { color: var(--b); }
 
 .progress {
   grid-column: 1;
@@ -237,7 +254,22 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   color: var(--gold);
 }
 
-.turn.mine { border-color: color-mix(in srgb, var(--a) 35%, var(--line)); }
+.turn.mine { border-color: color-mix(in srgb, var(--active) 35%, var(--line)); }
+
+/* On a blind turn, which teams have already locked in — never what they chose. */
+.locks { grid-column: 3; grid-row: 2; justify-self: end; display: flex; gap: 6px; }
+.lock {
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 1px 6px;
+}
+.lock.done { color: var(--side); border-color: color-mix(in srgb, var(--side) 50%, transparent); }
 
 /* ── the order rail ─────────────────────────────────────────────────────── */
 
@@ -268,8 +300,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   gap: 3px;
   transition: background 0.15s ease;
 }
-.rail li.A { border-top-color: color-mix(in srgb, var(--a) 55%, transparent); }
-.rail li.B { border-top-color: color-mix(in srgb, var(--b) 55%, transparent); }
+.rail li:is(.t0, .t1, .t2, .t3, .blind) { border-top-color: color-mix(in srgb, var(--side) 55%, transparent); }
 
 .rail .slot-label {
   font-family: var(--display);
@@ -280,10 +311,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   color: var(--faint);
   white-space: nowrap;
 }
-.rail li.A .slot-label { color: color-mix(in srgb, var(--a) 75%, var(--muted)); }
-.rail li.B .slot-label { color: color-mix(in srgb, var(--b) 75%, var(--muted)); }
+.rail li:is(.t0, .t1, .t2, .t3, .blind) .slot-label { color: color-mix(in srgb, var(--side) 75%, var(--muted)); }
 
-.rail .slot-heroes {
+.rail .slot-items {
   font-size: 12px;
   font-weight: 500;
   color: var(--text);
@@ -291,7 +321,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.rail li.pending .slot-heroes { color: var(--faint); }
+.rail li.pending .slot-items { color: var(--faint); }
 .rail li.done { background: var(--surface-2); }
 
 /* The turn actually on the clock, lit in its side's colour. */
@@ -299,9 +329,12 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   background: var(--surface-3);
   border-color: var(--line);
 }
-.rail li.now.A { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a) 60%, transparent), 0 0 14px var(--a-glow); }
-.rail li.now.B { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--b) 60%, transparent), 0 0 14px var(--b-glow); }
-.rail li.now .slot-heroes { color: var(--text); font-weight: 600; }
+.rail li.now {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--side, var(--line)) 60%, transparent),
+    0 0 14px var(--side-glow, transparent);
+}
+.rail li.now .slot-items { color: var(--text); font-weight: 600; }
 
 .rail .auto { margin-left: 4px; }
 
@@ -316,6 +349,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 
 .middle { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 
+/* Each flank of the board holds half the teams: one apiece in the usual case. */
+.flank { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
 /* ── a side's picks and bans ────────────────────────────────────────────── */
 
 .team {
@@ -327,8 +363,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   flex-direction: column;
   gap: 8px;
 }
-.team.active.team-A { border-color: color-mix(in srgb, var(--a) 45%, var(--line)); box-shadow: 0 0 18px var(--a-glow); }
-.team.active.team-B { border-color: color-mix(in srgb, var(--b) 45%, var(--line)); box-shadow: 0 0 18px var(--b-glow); }
+.team.active { border-color: color-mix(in srgb, var(--side) 45%, var(--line)); box-shadow: 0 0 18px var(--side-glow); }
 
 .team h2 {
   margin: 0;
@@ -338,9 +373,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   letter-spacing: 0.08em;
   text-transform: uppercase;
   line-height: 1;
+  color: var(--side);
 }
-.team-A h2 { color: var(--a); }
-.team-B h2 { color: var(--b); }
 
 .team h3 {
   margin: 4px 0 0;
@@ -375,8 +409,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   align-items: center;
   gap: 6px;
 }
-.team-A .picks li.filled { border-left-color: var(--a); }
-.team-B .picks li.filled { border-left-color: var(--b); }
+.team .picks li.filled { border-left-color: var(--side); }
 .picks li.empty, .bans li.empty { color: var(--faint); background: var(--surface-1); }
 
 .bans li img {
@@ -403,7 +436,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 }
 .bans li.empty { text-decoration: none; }
 
-/* A hero the clock chose must never be mistakeable for one somebody picked. */
+/* Something the clock chose must never be mistakeable for something somebody picked. */
 .auto {
   font-family: var(--display);
   font-style: normal;
@@ -429,8 +462,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
 }
-.strip.team-A { border-left: 2px solid var(--a); }
-.strip.team-B { border-left: 2px solid var(--b); }
+.strip { border-left: 2px solid var(--side, var(--line)); }
 
 .note {
   font-size: 11px;
@@ -467,7 +499,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 }
 .hand-over:hover, .claim:hover, .start-anyway:hover { color: var(--text); border-color: var(--a); }
 
-/* ── the hero pool ──────────────────────────────────────────────────────── */
+/* ── the pool ───────────────────────────────────────────────────────────── */
 
 .pool {
   background: var(--surface-1);
@@ -512,11 +544,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   gap: 5px;
 }
 
-/* The portrait is the tile. A captain scanning a pool under a clock is looking
+/* The picture is the tile. A captain scanning a pool under a clock is looking
    at faces, not reading a list, so the art fills the square and the name sits
-   over the foot of it. Heroes we have no portrait for keep the plain tile — a
+   over the foot of it. Anything without a picture keeps the plain tile — a
    missing picture should look deliberate rather than broken. */
-.hero {
+.item {
   width: 100%;
   aspect-ratio: 1;
   position: relative;
@@ -534,14 +566,14 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   overflow: hidden;
   transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
 }
-.hero:not(:disabled):hover {
+.item:not(:disabled):hover {
   background: var(--surface-3);
   border-color: color-mix(in srgb, var(--active) 55%, transparent);
   transform: translateY(-1px);
 }
-.hero:disabled { cursor: default; }
+.item:disabled { cursor: default; }
 
-.hero-icon {
+.item-icon {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -550,7 +582,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   display: block;
 }
 
-.hero-name {
+.item-name {
   font-size: 12px;
   font-weight: 500;
   line-height: 1.2;
@@ -561,8 +593,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 
 /* Over a portrait the name needs a ground of its own, or it fights whatever
    happens to be behind it. */
-.hero.has-icon { padding: 0; justify-content: flex-end; }
-.hero.has-icon .hero-name {
+.item.has-icon { padding: 0; justify-content: flex-end; }
+.item.has-icon .item-name {
   position: relative;
   z-index: 1;
   width: 100%;
@@ -574,21 +606,19 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 }
 
 /* Staged, not yet locked in: lit, but clearly still a proposal. */
-.hero.staged {
+.item.staged {
   background: var(--surface-3);
   border-color: var(--active);
   box-shadow: 0 0 14px var(--active-glow);
 }
 
-/* Gone, and why. A banned hero is struck through; a picked one wears the
-   colour of whoever took it. */
-.hero.banned { opacity: 0.38; }
-.hero.banned .hero-icon { filter: grayscale(1); }
-.hero.banned .hero-name { text-decoration: line-through; }
-.hero.picked-A, .hero.picked-B, .hero[class*="picked-"] { opacity: 0.4; }
-.hero[class*="picked-A"] { border-color: color-mix(in srgb, var(--a) 40%, transparent); }
-.hero[class*="picked-B"] { border-color: color-mix(in srgb, var(--b) 40%, transparent); }
-.hero[class*="picked-"] .hero-icon { filter: grayscale(0.65); }
+/* Gone, and why. Something removed is struck through; something taken wears
+   the colour of whoever took it — or gold, when the draft took it itself. */
+.item.removed { opacity: 0.38; }
+.item.removed .item-icon { filter: grayscale(1); }
+.item.removed .item-name { text-decoration: line-through; }
+.item.taken { opacity: 0.4; border-color: color-mix(in srgb, var(--side, var(--gold)) 40%, transparent); }
+.item.taken .item-icon { filter: grayscale(0.65); }
 
 .tag {
   position: absolute;
@@ -615,11 +645,13 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   padding: 0 4px;
   line-height: 1.4;
 }
-.ask.want { background: color-mix(in srgb, var(--live) 25%, var(--void)); color: var(--live); }
-.ask.ban { background: color-mix(in srgb, var(--danger) 25%, var(--void)); color: var(--danger); }
+/* Suggestions are coloured by what the action does, whatever the game calls it:
+   green for wanting something, red for wanting it gone. */
+.ask.take { background: color-mix(in srgb, var(--live) 25%, var(--void)); color: var(--live); }
+.ask.remove { background: color-mix(in srgb, var(--danger) 25%, var(--void)); color: var(--danger); }
 
-.hero.marked-want { border-color: color-mix(in srgb, var(--live) 60%, transparent); }
-.hero.marked-ban { border-color: color-mix(in srgb, var(--danger) 60%, transparent); }
+.item.marked-take { border-color: color-mix(in srgb, var(--live) 60%, transparent); }
+.item.marked-remove { border-color: color-mix(in srgb, var(--danger) 60%, transparent); }
 
 /* ── telling your captain ───────────────────────────────────────────────── */
 
@@ -646,8 +678,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   text-transform: uppercase;
   padding: 5px 10px;
 }
-.mode.want.on { border-color: var(--live); color: var(--live); background: color-mix(in srgb, var(--live) 12%, var(--surface-2)); }
-.mode.ban.on { border-color: var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--surface-2)); }
+.mode.take.on { border-color: var(--live); color: var(--live); background: color-mix(in srgb, var(--live) 12%, var(--surface-2)); }
+.mode.remove.on { border-color: var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--surface-2)); }
 
 .asked {
   display: inline-flex;
@@ -674,7 +706,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 }
 .confirm-bar.watching { background: var(--surface-1); }
 
-/* Scoped to the bar: `.staged` is also the hero tile's state class, and an
+/* Scoped to the bar: `.staged` is also the tile's state class, and an
    unscoped rule here reaches into the grid and restyles the tile's name. */
 .confirm-bar .staged {
   display: flex;
@@ -756,8 +788,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   flex-direction: column;
   gap: 8px;
 }
-.squad.team-A { border-top: 2px solid var(--a); }
-.squad.team-B { border-top: 2px solid var(--b); }
+.squad { border-top: 2px solid var(--side); }
 .squad h3 {
   margin: 0;
   font-family: var(--display);
@@ -765,9 +796,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: var(--side);
 }
-.squad.team-A h3 { color: var(--a); }
-.squad.team-B h3 { color: var(--b); }
 
 .ready-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .ready-off { background: var(--surface-3); color: var(--text); box-shadow: none; }
@@ -815,7 +845,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 
 .history-turn {
   display: grid;
-  grid-template-columns: 34px 88px 1fr auto;
+  grid-template-columns: 28px minmax(70px, 120px) 72px 1fr auto auto;
   align-items: center;
   gap: 10px;
   padding: 7px 10px;
@@ -825,8 +855,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   border-radius: var(--r);
   font-size: 13px;
 }
-.history-turn.team-A { border-left-color: var(--a); }
-.history-turn.team-B { border-left-color: var(--b); }
+.history-turn { border-left-color: var(--side, var(--gold)); }
 
 .history-number, .history-action, .history-took {
   font-family: var(--display);
@@ -952,7 +981,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
    one: the clock and the order first, then the pool, then each side. */
 @media (max-width: 1080px) {
   .board { grid-template-columns: 1fr; }
-  .team { order: 2; }
+  .flank { order: 2; }
   .middle { order: 1; }
 }
 
@@ -964,7 +993,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   .grid { grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); }
   .confirm-bar { flex-direction: column; align-items: stretch; gap: 10px; }
   .confirm { width: 100%; }
-  .staged { font-size: 18px; justify-content: space-between; }
+  .confirm-bar .staged { font-size: 18px; justify-content: space-between; }
   .room-footer .format { display: none; }
   .rail li { min-width: 72px; }
 }

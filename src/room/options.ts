@@ -8,11 +8,12 @@
  */
 
 import type { AutoFillStrategy } from "../types.js";
+import { TURN_TIME_BOUNDS } from "../script.js";
 import type { TimerRules } from "../timer.js";
 import { DEFAULT_TIMER_RULES } from "./room.js";
 
 /** Nobody can play a turn shorter than a second, and an hour is already generous. */
-export const TURN_BOUNDS = { minMs: 1_000, maxMs: 60 * 60_000 };
+export const TURN_BOUNDS = TURN_TIME_BOUNDS;
 export const BANK_BOUNDS = { minMs: 0, maxMs: 24 * 60 * 60_000 };
 
 export interface OptionProblem {
@@ -27,11 +28,12 @@ export function parseAutoFill(value: unknown): AutoFillStrategy | undefined {
 export function parseTimerRules(
   perTurnMs: unknown,
   bankMs: unknown,
+  defaults: TimerRules = DEFAULT_TIMER_RULES,
 ): { rules: TimerRules; problems: readonly OptionProblem[] } {
   const problems: OptionProblem[] = [];
 
-  const turn = bounded("perTurnMs", perTurnMs, TURN_BOUNDS, DEFAULT_TIMER_RULES.perTurnMs, problems);
-  const bank = bounded("bankMs", bankMs, BANK_BOUNDS, DEFAULT_TIMER_RULES.bankMs, problems);
+  const turn = bounded("perTurnMs", perTurnMs, TURN_BOUNDS, defaults.perTurnMs, problems);
+  const bank = bounded("bankMs", bankMs, BANK_BOUNDS, defaults.bankMs, problems);
 
   return { rules: { perTurnMs: turn, bankMs: bank }, problems };
 }

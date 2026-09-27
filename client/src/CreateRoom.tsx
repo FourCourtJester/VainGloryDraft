@@ -1,44 +1,35 @@
 import type { JSX } from "react";
 import { useEffect, useState } from "react";
-
-interface PresetSummary {
-  readonly id: string;
-  readonly name: string;
-  readonly format: string;
-  readonly official: boolean;
-  readonly turns: number;
-  readonly teamSize: number;
-  readonly notes: string | null;
-}
-
-interface Pending {
-  readonly id: string;
-  readonly format: string;
-  readonly blockedOn: string;
-}
+import type { TeamDefinition } from "../../src/types.js";
+import type { GameSummary } from "./game.js";
 
 interface Created {
   readonly roomId: string;
-  readonly codes: { readonly A: string; readonly B: string };
+  readonly teams: readonly TeamDefinition[];
+  readonly format: string;
+  readonly codes: Readonly<Record<string, string>>;
   readonly links: {
-    readonly teamA: string;
-    readonly teamB: string;
+    readonly teams: Readonly<Record<string, string>>;
     readonly spectator: string;
     readonly join: string;
   };
 }
 
 /**
- * The screen an organiser starts from: choose a format and the clock, create the
- * room, and get back the three links to hand out.
+ * The screen an organiser starts from: choose a game, a format and the clock,
+ * create the room, and get back a link for every team and one for spectators.
+ *
+ * A format can be one the game ships or one typed out here, so a tournament
+ * trying a new order does not need anybody to change the app first.
  */
 export function CreateRoom(): JSX.Element {
-  const [presets, setPresets] = useState<readonly PresetSummary[]>([]);
-  const [pending, setPending] = useState<readonly Pending[]>([]);
-  const [presetId, setPresetId] = useState("vg-5v5-standard");
-  const [mirrorPicks, setMirrorPicks] = useState(false);
-  const [perTurnSeconds, setPerTurnSeconds] = useState(30);
-  const [bankSeconds, setBankSeconds] = useState(60);
+  const [games, setGames] = useState<readonly GameSummary[]>([]);
+  const [gameId, setGameId] = useState<string | null>(null);
+  const [presetId, setPresetId] = useState<string | null>(null);
+  const [custom, setCustom] = useState("");
+  const [mirror, setMirror] = useState<boolean | null>(null);
+  const [perTurnSeconds, setPerTurnSeconds] = useState<number | null>(null);
+  const [bankSeconds, setBankSeconds] = useState<number | null>(null);
   // How many players a side waits for. Follows the format unless the organiser
   // says otherwise — a captains-only draft is one a side.
   const [teamSize, setTeamSize] = useState<number | null>(null);
@@ -47,16 +38,31 @@ export function CreateRoom(): JSX.Element {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void fetch("/api/presets")
-      .then((response) => response.json() as Promise<{ presets: PresetSummary[]; pending: Pending[] }>)
-      .then((data) => {
-        setPresets(data.presets);
-        setPending(data.pending);
-      })
-      .catch(() => setError("Could not load presets."));
+    void fetch("/api/games")
+      .then((response) => response.json() as Promise<{ games: GameSummary[] }>)
+      .then((data) => setGames(data.games))
+      .catch(() => setError("Could not load the games."));
   }, []);
 
+  const game = games.find((g) => g.id === gameId) ?? games[0];
+  const preset = game?.presets.find((p) => p.id === (presetId ?? game.defaults.preset)) ?? game?.presets[0];
+  // Everything below follows the game until the organiser changes it.
+  const turnSeconds = perTurnSeconds ?? (game === undefined ? 30 : game.defaults.clock.perTurnMs / 1000);
+  const reserveSeconds = bankSeconds ?? (game === undefined ? 60 : game.defaults.clock.bankMs / 1000);
+  const mirrors = mirror ?? game?.defaults.mirror ?? false;
+  const usingCustom = custom.trim() !== "";
+
+  const chooseGame = (id: string): void => {
+    setGameId(id);
+    setPresetId(null);
+    setPerTurnSeconds(null);
+    setBankSeconds(null);
+    setMirror(null);
+    setTeamSize(null);
+  };
+
   const create = async (): Promise<void> => {
+    if (game === undefined) return;
     setBusy(true);
     setError(null);
     try {
@@ -64,10 +70,11 @@ export function CreateRoom(): JSX.Element {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          presetId,
-          mirrorPicks,
-          perTurnMs: perTurnSeconds * 1000,
-          bankMs: bankSeconds * 1000,
+          game: game.id,
+          ...(usingCustom ? { script: custom } : { preset: preset?.id }),
+          mirror: mirrors,
+          perTurnMs: turnSeconds * 1000,
+          bankMs: reserveSeconds * 1000,
           teamSize: teamSize ?? undefined,
         }),
       });
@@ -84,21 +91,17 @@ export function CreateRoom(): JSX.Element {
   if (room !== null) {
     return (
       <main className="create">
-        <header className="brand">
-          <img src="/logo.svg" alt="" width={44} height={44} />
-          <span>
-            <strong>Vainglory</strong> Draft
-          </span>
-        </header>
+        <Brand />
         <h1>Room {room.roomId}</h1>
         <p className="note">
           Send each side its own link. Everyone on a team uses the same one; the first to arrive does the
-          picking and can hand that job to a teammate. The draft starts once every player is ready — until
+          choosing and can hand that job to a teammate. The draft starts once every player is ready — until
           then the clock is not running.
         </p>
         <ul className="links">
-          <LinkRow label="Team A" href={room.links.teamA} code={room.codes.A} />
-          <LinkRow label="Team B" href={room.links.teamB} code={room.codes.B} />
+          {room.teams.map((team) => (
+            <LinkRow key={team.id} label={team.name} href={room.links.teams[team.id] ?? ""} code={room.codes[team.id]} />
+          ))}
           <LinkRow label="Spectators" href={room.links.spectator} />
         </ul>
         <p className="note">
@@ -109,46 +112,69 @@ export function CreateRoom(): JSX.Element {
           Everything here is reusable: the same link or code works again after a refresh, a crash, or on a
           second device.
         </p>
+        <p className="note">Order: {room.format}</p>
       </main>
     );
   }
 
-  const chosen = presets.find((preset) => preset.id === presetId);
-
   return (
     <main className="create">
-      <header className="brand">
-        <img src="/logo.svg" alt="" width={44} height={44} />
-        <span>
-          <strong>Vainglory</strong> Draft
-        </span>
-      </header>
+      <Brand />
       <h1>New draft</h1>
+
+      {games.length > 1 && (
+        <label>
+          Game
+          <select value={game?.id ?? ""} onChange={(event) => chooseGame(event.target.value)}>
+            {games.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <label>
         Format
-        <select value={presetId} onChange={(event) => setPresetId(event.target.value)}>
-          {presets.map((preset) => (
-            <option key={preset.id} value={preset.id}>
-              {preset.name} — {preset.turns} turns
+        <select
+          value={preset?.id ?? ""}
+          disabled={usingCustom}
+          onChange={(event) => {
+            setPresetId(event.target.value);
+            setTeamSize(null);
+          }}
+        >
+          {game?.presets.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name} — {p.turns} turns
             </option>
           ))}
         </select>
       </label>
-      {chosen?.official === false && (
-        <p className="warn">
-          This is a development placeholder, not a competitive format. {chosen.notes}
-        </p>
-      )}
-      {pending.length > 0 && (
-        <p className="note">
-          Not available yet: {pending.map((entry) => `${entry.id} (${entry.blockedOn})`).join("; ")}
-        </p>
+      {!usingCustom && preset?.notes !== null && preset?.notes !== undefined && <p className="note">{preset.notes}</p>}
+      {!usingCustom && preset?.official === false && (
+        <p className="warn">This format has not been confirmed as the one really played. Check it before a match.</p>
       )}
 
+      <label>
+        Or write your own order
+        <input
+          value={custom}
+          onChange={(event) => setCustom(event.target.value)}
+          placeholder={preset?.format ?? "A ban, B ban, A pick, B pick x2"}
+          spellCheck={false}
+          autoComplete="off"
+        />
+      </label>
+      <p className="note">
+        Turns separated by commas: a team and an action, then "x2" to choose two at once, "@45s" for a turn's own
+        clock. "A+B ban" has both sides ban blind at the same time; "remaining pick" takes whatever is left.
+      </p>
+
       <label className="row">
-        <input type="checkbox" checked={mirrorPicks} onChange={(event) => setMirrorPicks(event.target.checked)} />
-        Allow mirror picks
+        <input type="checkbox" checked={mirrors} onChange={(event) => setMirror(event.target.checked)} />
+        Let more than one team take the same {game?.terms.item ?? "thing"}
       </label>
 
       <label>
@@ -157,12 +183,12 @@ export function CreateRoom(): JSX.Element {
           type="number"
           min={1}
           max={10}
-          value={teamSize ?? chosen?.teamSize ?? 5}
+          value={teamSize ?? (usingCustom ? 1 : (preset?.teamSize ?? 1))}
           onChange={(event) => setTeamSize(Number(event.target.value))}
         />
       </label>
       <p className="note">
-        Everyone joins before the draft begins. Set this to 1 if only the two captains are turning up.
+        Everyone joins before the draft begins. Set this to 1 if only the captains are turning up.
       </p>
 
       <label>
@@ -171,7 +197,7 @@ export function CreateRoom(): JSX.Element {
           type="number"
           min={5}
           max={300}
-          value={perTurnSeconds}
+          value={turnSeconds}
           onChange={(event) => setPerTurnSeconds(Number(event.target.value))}
         />
       </label>
@@ -182,7 +208,7 @@ export function CreateRoom(): JSX.Element {
           type="number"
           min={0}
           max={900}
-          value={bankSeconds}
+          value={reserveSeconds}
           onChange={(event) => setBankSeconds(Number(event.target.value))}
         />
       </label>
@@ -191,11 +217,22 @@ export function CreateRoom(): JSX.Element {
         There is no pause. If somebody drops, the clock keeps running and the room decides what to do.
       </p>
 
-      <button type="button" className="confirm" disabled={busy} onClick={() => void create()}>
+      <button type="button" className="confirm" disabled={busy || game === undefined} onClick={() => void create()}>
         {busy ? "Creating…" : "Create room"}
       </button>
       {error !== null && <p className="warn">{error}</p>}
     </main>
+  );
+}
+
+function Brand(): JSX.Element {
+  return (
+    <header className="brand">
+      <img src="/logo.svg" alt="" width={44} height={44} />
+      <span>
+        <strong>Vainglory</strong> Draft
+      </span>
+    </header>
   );
 }
 
@@ -207,7 +244,7 @@ function LinkRow({
 }: {
   readonly label: string;
   readonly href: string;
-  readonly code?: string;
+  readonly code?: string | undefined;
 }): JSX.Element {
   const [copied, setCopied] = useState(false);
   return (

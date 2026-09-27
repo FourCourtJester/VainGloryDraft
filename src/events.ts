@@ -1,6 +1,6 @@
 /**
- * Announcements about what just happened in a draft: a hero banned, a hero
- * picked, a new team on the clock, a finished draft.
+ * Announcements about what just happened in a draft: something chosen, a new
+ * turn on the clock, a finished draft.
  *
  * This is how anything else in the world finds out about a draft without
  * needing to understand how drafting works. A panel showing statistics for a
@@ -8,34 +8,27 @@
  * a tournament's chat — each of those listens here, and none of them requires
  * the draft rules to be touched.
  *
- * Only confirmed actions are announced. A captain hovering over a hero, or
- * choosing one and changing their mind, is nobody else's business.
+ * Only confirmed actions are announced. A captain hovering over something, or
+ * choosing it and changing their mind, is nobody else's business — and neither
+ * is a team having confirmed a blind turn, until the whole turn is revealed.
  */
 
-import { currentTurn, currentTurnIndex, isComplete, picksOf, bansOf } from "./engine.js";
-import type { DraftState, Team, Turn } from "./types.js";
+import { currentTurn, isComplete, summarise } from "./engine.js";
+import type { DraftSummary } from "./engine.js";
+import type { ActionId, DraftState, Team, Turn } from "./types.js";
 
 export type DraftEvent =
   | {
-      readonly type: "pick";
-      readonly team: Team;
-      readonly heroes: readonly string[];
-      readonly turnIndex: number;
-      readonly auto: boolean;
-    }
-  | {
-      readonly type: "ban";
-      readonly team: Team;
-      readonly heroes: readonly string[];
+      readonly type: "choice";
+      /** Who chose. Null when the draft took what was left. */
+      readonly team: Team | null;
+      readonly action: ActionId;
+      readonly items: readonly string[];
       readonly turnIndex: number;
       readonly auto: boolean;
     }
   | { readonly type: "turnChange"; readonly turnIndex: number; readonly turn: Turn }
-  | {
-      readonly type: "draftComplete";
-      readonly picks: Readonly<Record<Team, readonly string[]>>;
-      readonly bans: Readonly<Record<Team, readonly string[]>>;
-    };
+  | { readonly type: "draftComplete"; readonly byTeam: DraftSummary["byTeam"] };
 
 export type DraftEventType = DraftEvent["type"];
 
@@ -51,26 +44,23 @@ export function diffEvents(prev: DraftState, next: DraftState): readonly DraftEv
   const events: DraftEvent[] = [];
 
   for (let i = prev.committed.length; i < next.committed.length; i++) {
-    const committed = next.committed[i]!;
+    const selection = next.committed[i]!;
     events.push({
-      type: committed.action,
-      team: committed.team,
-      heroes: committed.heroes,
-      turnIndex: committed.index,
-      auto: committed.auto,
+      type: "choice",
+      team: selection.team,
+      action: selection.action,
+      items: selection.items,
+      turnIndex: selection.index,
+      auto: selection.auto,
     });
   }
 
-  if (next.committed.length !== prev.committed.length) {
+  if (next.turnIndex !== prev.turnIndex) {
     const turn = currentTurn(next);
     if (turn !== null) {
-      events.push({ type: "turnChange", turnIndex: currentTurnIndex(next), turn });
+      events.push({ type: "turnChange", turnIndex: next.turnIndex, turn });
     } else if (isComplete(next) && !isComplete(prev)) {
-      events.push({
-        type: "draftComplete",
-        picks: { A: picksOf(next, "A"), B: picksOf(next, "B") },
-        bans: { A: bansOf(next, "A"), B: bansOf(next, "B") },
-      });
+      events.push({ type: "draftComplete", byTeam: summarise(next).byTeam });
     }
   }
 
@@ -99,7 +89,7 @@ export class DraftEventBus {
     return () => this.#handlers.delete(handler);
   }
 
-  /** Listen for just one kind of announcement, such as picks but not bans. */
+  /** Listen for just one kind of announcement, such as choices but not turn changes. */
   on<T extends DraftEventType>(type: T, handler: (event: Extract<DraftEvent, { type: T }>) => void): () => void {
     return this.subscribe((event) => {
       if (event.type === type) handler(event as Extract<DraftEvent, { type: T }>);

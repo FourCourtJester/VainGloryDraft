@@ -23,6 +23,11 @@ function check(label, ok, detail = "") {
   if (!ok) failures++;
   console.log(`${ok ? "ok  " : "FAIL"}  ${label}${ok || detail === "" ? "" : `  — ${detail}`}`);
 }
+// Rooms this script makes over the API come from made-up addresses, so they do
+// not spend the allowance this machine's own browser is held to when it makes
+// one through the page. Locally the worker believes whatever address it is
+// told; behind Cloudflare the header cannot be forged.
+const testAddress = () => `198.51.100.${1 + Math.floor(Math.random() * 250)}`;
 const shot = async (page, name) => (SHOTS === null ? undefined : page.screenshot({ path: `${SHOTS}/${name}.png` }));
 
 const browser = await chromium.launch(
@@ -37,7 +42,9 @@ const organiser = await context.newPage();
 watch(organiser, "organiser");
 await organiser.goto(BASE);
 await organiser.waitForSelector("select");
-check("offers the 5v5 standard", (await organiser.locator("select option").first().textContent()).includes("5v5 Standard"));
+const offered = await organiser.locator("select option").allTextContents();
+check("offers every game", offered.includes("Vainglory") && offered.includes("Counter-Strike 2"), offered.join(" | "));
+check("and the 5v5 standard first", offered.some((text) => text.startsWith("5v5 Standard")), offered.join(" | "));
 // A short clock so the alarm can be watched without a long wait. This check is
 // about drafting rather than the lobby, so one player a side.
 await organiser.fill('input[type="number"] >> nth=0', "1"); // players per side
@@ -68,7 +75,7 @@ const enter = async (link, who) => {
 
 const a = await enter(captainA, "Ana");
 check("puts a player on the side their link belongs to", (await a.locator(".badge").textContent()).startsWith("Team A"));
-check("and has them picking, as the first to arrive", (await a.locator(".squad.team-A .tag.lead").count()) === 1);
+check("and has them picking, as the first to arrive", (await a.locator(".squad.t0 .tag.lead").count()) === 1);
 check("runs no clock while waiting", (await a.locator(".turn").count()) === 0);
 await shot(a, "ui-lobby");
 
@@ -84,50 +91,50 @@ await wait(300);
 check("nor when only one side has confirmed", (await a.locator(".turn").count()) === 0);
 await b.click(".ready-bar button");
 await a.waitForSelector(".turn", { timeout: 5_000 });
-check("starts once every player is ready", (await a.locator(".turn-label").textContent()).startsWith("Team A bans"));
+check("starts once every player is ready", (await a.locator(".turn-label").textContent()).startsWith("Team A · Ban"));
 check("shows both sides connected", (await a.locator(".presence.connected").count()) === 2);
 
 // ── the staging rule, in the rendered DOM ───────────────────────────────────
-await a.locator("button.hero", { hasText: "Ozo" }).first().click();
+await a.locator("button.item", { hasText: "Ozo" }).first().click();
 await wait(400);
-check("the side on the clock sees its own staging", (await a.locator("button.hero.staged").count()) === 1);
-check("spectators see the active team's staging", (await spectator.locator("button.hero.staged").count()) === 1);
-check("the opposing side does not", (await b.locator("button.hero.staged").count()) === 0);
+check("the side on the clock sees its own staging", (await a.locator("button.item.staged").count()) === 1);
+check("spectators see the active team's staging", (await spectator.locator("button.item.staged").count()) === 1);
+check("the opposing side does not", (await b.locator("button.item.staged").count()) === 0);
 // Spectators can see what the team on the clock is considering, but must not be
 // able to join in.
-check("a spectator cannot click the staged hero", await spectator.locator("button.hero.staged").first().isDisabled());
+check("a spectator cannot click the staged hero", await spectator.locator("button.item.staged").first().isDisabled());
 await shot(a, "ui-staged");
 await shot(b, "ui-opponent");
 
-await a.locator("button.hero", { hasText: "Ozo" }).first().click();
+await a.locator("button.item", { hasText: "Ozo" }).first().click();
 await wait(300);
-check("clicking a staged hero unstages it", (await a.locator("button.hero.staged").count()) === 0);
+check("clicking a staged hero unstages it", (await a.locator("button.item.staged").count()) === 0);
 check("confirm is refused with nothing staged", await a.locator("button.confirm").isDisabled());
 
-await a.locator("button.hero", { hasText: "Ozo" }).first().click();
+await a.locator("button.item", { hasText: "Ozo" }).first().click();
 await wait(300);
 await a.locator("button.confirm").click();
 await wait(500);
-check("the ban lands for every viewer", (await spectator.locator(".team-A .bans li").first().textContent()) === "Ozo");
-check("and the turn passes on", (await b.locator(".turn-label").textContent()).startsWith("Team B bans"));
-check("a banned hero is struck out of the pool", (await spectator.locator("button.hero.banned").count()) === 1);
+check("the ban lands for every viewer", (await spectator.locator(".t0 .bans li").first().textContent()) === "Ozo");
+check("and the turn passes on", (await b.locator(".turn-label").textContent()).startsWith("Team B · Ban"));
+check("a banned hero is struck out of the pool", (await spectator.locator("button.item.removed").count()) === 1);
 
 // Out of turn a hero can still be tapped, but only to tell your captain: it
 // stages nothing, and no action is offered that the server would refuse.
-await a.locator('button.hero[data-hero="ringo"]').click();
+await a.locator('button.item[data-item="ringo"]').click();
 await wait(400);
-check("out of turn, tapping a hero stages nothing", (await a.locator("button.hero.staged").count()) === 0);
+check("out of turn, tapping a hero stages nothing", (await a.locator("button.item.staged").count()) === 0);
 check("and no confirm bar is shown", (await a.locator(".confirm-bar").count()) === 0);
 check("the turn is undisturbed", (await b.locator(".turn-label").textContent()).startsWith("Team B"));
 
 // ── the clock resolves a turn nobody answered ───────────────────────────────
 console.log("      waiting out B's clock (8s turn + 4s reserve)…");
 await wait(13_000);
-const autoBan = await spectator.locator(".team-B .bans li").first().textContent();
+const autoBan = await spectator.locator(".t1 .bans li").first().textContent();
 check("the timer resolved B's ban unattended", autoBan !== "—" && autoBan.length > 0, autoBan);
-check("and play moved to the next turn", (await spectator.locator(".turn-label").textContent()).startsWith("Team A bans"));
-check("marks the timer's choice as auto", (await spectator.locator(".team-B .bans .auto").count()) === 1);
-check("leaves a captain's own ban unmarked", (await spectator.locator(".team-A .bans .auto").count()) === 0);
+check("and play moved to the next turn", (await spectator.locator(".turn-label").textContent()).startsWith("Team A · Ban"));
+check("marks the timer's choice as auto", (await spectator.locator(".t1 .bans .auto").count()) === 1);
+check("leaves a captain's own ban unmarked", (await spectator.locator(".t0 .bans .auto").count()) === 0);
 check("shows how far through the draft the room is", (await spectator.locator(".progress").textContent()).includes("of 10"));
 await shot(spectator, "ui-spectator");
 
@@ -137,7 +144,7 @@ await wait(600);
 check("shows a side as disconnected", (await spectator.locator(".presence.disconnected").count()) === 1);
 const rejoined = await enter(captainA, "Ana");
 check("the same link rejoins mid-draft", (await rejoined.locator(".badge").textContent()).startsWith("Team A"));
-check("with the draft intact", (await rejoined.locator(".team-A .bans li").first().textContent()) === "Ozo");
+check("with the draft intact", (await rejoined.locator(".t0 .bans li").first().textContent()) === "Ozo");
 
 // ── joining with a code ────────────────────────────────────────────────────
 // A captain read their code over voice rather than tapping a link.
@@ -182,8 +189,8 @@ check("without shutting out spectators", watching.status === 200);
 const pairRoom = await (
   await fetch(`${BASE}/api/rooms`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ script: "Apick, Bpick x2", teamSize: 1, perTurnMs: 120_000 }),
+    headers: { "content-type": "application/json", "cf-connecting-ip": testAddress() },
+    body: JSON.stringify({ game: "vainglory", script: "Apick, Bpick x2", teamSize: 1, perTurnMs: 120_000 }),
   })
 ).json();
 
@@ -202,28 +209,28 @@ const pairB = await pairPlayer(pairRoom.codes.B, "Bex");
 for (const page of [pairA, pairB]) await page.click(".ready-bar button");
 await pairA.waitForSelector(".turn", { timeout: 8_000 });
 
-await pairA.locator('button.hero[data-hero="ozo"]').click();
+await pairA.locator('button.item[data-item="ozo"]').click();
 await pairA.locator("button.confirm").click();
 await pairA.waitForFunction(() => document.querySelector(".turn-label")?.textContent?.includes("Team B"), null, { timeout: 8_000 });
-check("a double pick asks for two heroes at once", (await pairB.locator(".turn-label").textContent()) === "Team B picks 2");
+check("a double pick asks for two heroes at once", (await pairB.locator(".turn-label").textContent()) === "Team B · Pick 2");
 
-await pairB.locator('button.hero[data-hero="krul"]').click();
+await pairB.locator('button.item[data-item="krul"]').click();
 await wait(300);
 check("one of the two is not enough to confirm", await pairB.locator("button.confirm").isDisabled());
 check("and the count says how many are still wanted", (await pairB.locator(".slots").textContent()).trim() === "1/2");
-check("nothing is committed while they think", (await pairB.locator(".team-B .picks li").allTextContents()).every((text) => text === "—"));
+check("nothing is committed while they think", (await pairB.locator(".t1 .picks li").allTextContents()).every((text) => text === "—"));
 
-await pairB.locator('button.hero[data-hero="krul"]').click();
+await pairB.locator('button.item[data-item="krul"]').click();
 await wait(300);
-check("either hero can still be swapped out", (await pairB.locator("button.hero.staged").count()) === 0);
+check("either hero can still be swapped out", (await pairB.locator("button.item.staged").count()) === 0);
 
-await pairB.locator('button.hero[data-hero="krul"]').click();
-await pairB.locator('button.hero[data-hero="taka"]').click();
+await pairB.locator('button.item[data-item="krul"]').click();
+await pairB.locator('button.item[data-item="taka"]').click();
 await wait(300);
 check("both staged, the pair can be locked in", await pairB.locator("button.confirm").isEnabled());
 await pairB.locator("button.confirm").click();
 await wait(600);
-check("and both land together on one confirm", (await pairA.locator(".team-B .picks li").allTextContents()).filter((text) => text !== "—").length === 2);
+check("and both land together on one confirm", (await pairA.locator(".t1 .picks li").allTextContents()).filter((text) => text !== "—").length === 2);
 check("which finishes a two-turn draft", (await pairA.locator(".history").count()) === 1);
 for (const page of [pairA, pairB]) await page.close();
 
@@ -233,8 +240,8 @@ for (const page of [pairA, pairB]) await page.close();
 const squadRoom = await (
   await fetch(`${BASE}/api/rooms`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ presetId: "vg-3v3-standard", perTurnMs: 60_000 }),
+    headers: { "content-type": "application/json", "cf-connecting-ip": testAddress() },
+    body: JSON.stringify({ game: "vainglory", preset: "vg-3v3-standard", perTurnMs: 60_000 }),
   })
 ).json();
 
@@ -250,19 +257,19 @@ const squad = async (code, who) => {
 };
 
 const ana = await squad(squadRoom.codes.A, "Ana");
-check("the first player on a side does the picking", (await ana.locator(".squad.team-A .tag.lead").count()) === 1);
+check("the first player on a side does the picking", (await ana.locator(".squad.t0 .tag.lead").count()) === 1);
 const ali = await squad(squadRoom.codes.A, "Ali");
 const ash = await squad(squadRoom.codes.A, "Ash");
 await wait(500);
-check("teammates land on the same side", (await ana.locator(".squad.team-A li:not(.empty)").count()) === 3);
-check("and only one of them picks", (await ana.locator(".squad.team-A .tag.lead").count()) === 1);
+check("teammates land on the same side", (await ana.locator(".squad.t0 li:not(.empty)").count()) === 3);
+check("and only one of them picks", (await ana.locator(".squad.t0 .tag.lead").count()) === 1);
 check("a teammate is offered no hand-over", (await ali.locator("button.hand-over").count()) === 0);
 check("the one picking is offered one per teammate", (await ana.locator("button.hand-over").count()) === 2);
 await shot(ana, "ui-lobby-squad");
 
-await ana.locator(".squad.team-A li", { hasText: "Ash" }).locator("button.hand-over").click();
+await ana.locator(".squad.t0 li", { hasText: "Ash" }).locator("button.hand-over").click();
 await wait(600);
-check("handing over moves the job", (await ash.locator(".squad.team-A li").filter({ hasText: "Ash" }).locator(".tag.lead").count()) === 1);
+check("handing over moves the job", (await ash.locator(".squad.t0 li").filter({ hasText: "Ash" }).locator(".tag.lead").count()) === 1);
 check("and takes the buttons with it", (await ana.locator("button.hand-over").count()) === 0);
 
 const ben = await squad(squadRoom.codes.B, "Ben");
@@ -280,17 +287,17 @@ await bo.click(".ready-bar button");
 await ana.waitForSelector(".turn", { timeout: 8_000 });
 check("the last confirmation starts the draft", (await ana.locator(".turn").count()) === 1);
 
-await ash.locator("button.hero", { hasText: /^Ozo$/ }).first().click();
+await ash.locator("button.item", { hasText: /^Ozo$/ }).first().click();
 await wait(400);
-check("the one picking can choose", (await ash.locator("button.hero.staged").count()) === 1);
-check("a teammate watches their own side deliberate", (await ali.locator("button.hero.staged").count()) === 1);
-check("the other side cannot", (await ben.locator("button.hero.staged").count()) === 0);
+check("the one picking can choose", (await ash.locator("button.item.staged").count()) === 1);
+check("a teammate watches their own side deliberate", (await ali.locator("button.item.staged").count()) === 1);
+check("the other side cannot", (await ben.locator("button.item.staged").count()) === 0);
 // The leader already has one hero staged at this point, so the test is that a
 // teammate's tap adds nothing to it and offers them nothing to confirm.
-const stagedBefore = await ash.locator("button.hero.staged").count();
-await ali.locator('button.hero[data-hero="ringo"]').click();
+const stagedBefore = await ash.locator("button.item.staged").count();
+await ali.locator('button.item[data-item="ringo"]').click();
 await wait(400);
-check("a teammate tapping a hero stages nothing", (await ash.locator("button.hero.staged").count()) === stagedBefore);
+check("a teammate tapping a hero stages nothing", (await ash.locator("button.item.staged").count()) === stagedBefore);
 check("and they are offered nothing to confirm", (await ali.locator("button.confirm").count()) === 0);
 
 // ── telling the captain what you want ──────────────────────────────────────
@@ -300,28 +307,28 @@ check("the one picking gets no suggest controls", (await ash.locator(".suggest-b
 check("their teammates do", (await ali.locator(".suggest-bar").count()) === 1);
 
 for (const page of [ali, ana]) {
-  await page.click(".suggest-bar .mode.want");
-  await page.locator('button.hero[data-hero="krul"]').click();
+  await page.click(".suggest-bar .mode.take");
+  await page.locator('button.item[data-item="krul"]').click();
 }
-await ana.click(".suggest-bar .mode.ban");
-await ana.locator('button.hero[data-hero="saw"]').click();
+await ana.click(".suggest-bar .mode.remove");
+await ana.locator('button.item[data-item="saw"]').click();
 await wait(700);
 
 const askedFor = await ash.locator(".asked-for .asked").allTextContents();
 check("the captain is shown what their side asked for", askedFor.some((text) => text.startsWith("Krul")), askedFor.join(" | "));
 check("with the most-agreed first", askedFor[0]?.startsWith("Krul") === true, askedFor.join(" | "));
-check("and how many of them wanted it", (await ash.locator(".asked-for .ask.want").first().textContent()) === "2");
-check("a ban asked for reads apart from a want", (await ash.locator(".asked-for .ask.ban").count()) === 1);
+check("and how many of them wanted it", (await ash.locator(".asked-for .ask.take").first().textContent()) === "2");
+check("a ban asked for reads apart from a want", (await ash.locator(".asked-for .ask.remove").count()) === 1);
 check("the other side is shown none of it", (await ben.locator(".asked-for").count()) === 0);
-check("a teammate sees their own marks", (await ana.locator("button.hero.marked-want").count()) === 1);
+check("a teammate sees their own marks", (await ana.locator("button.item.marked-take").count()) === 1);
 check("marking never moves the draft on", (await ash.locator(".turn-label").textContent()).startsWith("Team A"));
 
 // ── names, and beginning short-handed ──────────────────────────────────────
 const shortRoom = await (
   await fetch(`${BASE}/api/rooms`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ presetId: "vg-3v3-standard", perTurnMs: 60_000, teamSize: 3 }),
+    headers: { "content-type": "application/json", "cf-connecting-ip": testAddress() },
+    body: JSON.stringify({ game: "vainglory", preset: "vg-3v3-standard", perTurnMs: 60_000, teamSize: 3 }),
   })
 ).json();
 
@@ -351,6 +358,67 @@ check("and the other side is told it can finish it", (await second.page.locator(
 await second.page.click(".start-anyway button");
 await first.page.waitForSelector(".turn", { timeout: 8_000 });
 check("both leaders agreeing begins it short-handed", (await first.page.locator(".turn").count()) === 1);
+
+// ── another game on the same screens ───────────────────────────────────────
+// A map veto: other words, no pictures, a blind opening ban, and a decider the
+// draft takes itself. Nothing on screen should still think it is Vainglory.
+const vetoRoom = await (
+  await fetch(`${BASE}/api/rooms`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "cf-connecting-ip": testAddress() },
+    body: JSON.stringify({ game: "cs2", script: "A+B ban, A pick, B pick, remaining pick", perTurnMs: 120_000 }),
+  })
+).json();
+
+const vetoPlayer = async (code, who) => {
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+  watch(page, who);
+  await page.goto(`${BASE}/r/${vetoRoom.roomId}?code=${code}`);
+  await page.waitForSelector("input[aria-label='Your name']", { timeout: 5_000 });
+  await page.fill("input[aria-label='Your name']", who);
+  await page.click("button.confirm");
+  await page.waitForSelector(".lobby, .turn", { timeout: 8_000 });
+  return page;
+};
+const vetoA = await vetoPlayer(vetoRoom.codes.A, "Cas");
+const vetoB = await vetoPlayer(vetoRoom.codes.B, "Dev");
+const vetoWatch = await context.newPage();
+watch(vetoWatch, "veto spectator");
+await vetoWatch.goto(vetoRoom.links.spectator);
+for (const page of [vetoA, vetoB]) await page.click(".ready-bar button");
+await vetoA.waitForSelector(".turn", { timeout: 8_000 });
+
+check("a veto speaks of maps", (await vetoA.locator(".pool-filters input").getAttribute("placeholder")) === "Search maps");
+check("with every map on the board", (await vetoA.locator("button.item").count()) === 7);
+check("a blind turn names both sides", (await vetoWatch.locator(".turn-label").textContent()) === "Team A + Team B · Ban");
+check("and both can choose at once", (await vetoA.locator("button.confirm").count()) === 1 && (await vetoB.locator("button.confirm").count()) === 1);
+
+await vetoA.locator('button.item[data-item="nuke"]').click();
+await wait(300);
+check("a spectator cannot see a blind choice", (await vetoWatch.locator("button.item.staged").count()) === 0);
+check("nor can the other side", (await vetoB.locator("button.item.staged").count()) === 0);
+await vetoA.locator("button.confirm").click();
+await wait(400);
+check("a side that has locked in is told what it chose", (await vetoA.locator(".confirm-bar.watching").textContent()).includes("Nuke"));
+check("everyone sees that it has locked, not what", (await vetoWatch.locator(".lock.done").count()) === 1 && (await vetoWatch.locator("button.item.removed").count()) === 0);
+await shot(vetoWatch, "ui-veto-blind");
+
+await vetoB.locator('button.item[data-item="train"]').click();
+await vetoB.locator("button.confirm").click();
+await vetoWatch.waitForFunction(() => document.querySelectorAll("button.item.removed").length === 2, null, { timeout: 5_000 });
+check("the second lock reveals both bans", (await vetoWatch.locator("button.item.removed").count()) === 2);
+check("and the pick moves on to one side", (await vetoWatch.locator(".turn-label").textContent()) === "Team A · Pick");
+
+for (const [page, map] of [[vetoA, "mirage"], [vetoB, "inferno"]]) {
+  await page.locator(`button.item[data-item="${map}"]`).click();
+  await page.locator("button.confirm").click();
+  await wait(400);
+}
+await vetoWatch.waitForSelector(".history", { timeout: 5_000 });
+const history = await vetoWatch.locator(".history-turn").allTextContents();
+check("the draft takes the decider itself", history.at(-1)?.startsWith("4Remaining") === true, history.join(" | "));
+check("and says the veto is over", (await vetoWatch.locator(".banner.done").count()) === 1);
+await shot(vetoWatch, "ui-veto-done");
 
 check("no uncaught client errors", clientErrors.length === 0, clientErrors.join(" | "));
 

@@ -1,5 +1,5 @@
 /**
- * A draft room: the draft itself, the clock, the three links, and whoever is
+ * A draft room: the draft itself, the clock, the links, and whoever is
  * currently connected.
  *
  * This is the version of a draft that counts. Screens show what a room tells
@@ -14,19 +14,26 @@
  */
 
 import { draftConfig } from "../config.js";
-import { availability, commit, createDraft, currentTurn, isComplete, resolveTimeout, stage, unstage } from "../engine.js";
+import { availability, commit, createDraft, currentTurn, isComplete, resolveTimeout, stage, unstage, waitingOn } from "../engine.js";
 import type { DraftEvent } from "../events.js";
 import { diffEvents } from "../events.js";
-import { ALL_HERO_IDS } from "../heroes.js";
-import { defaultScript } from "../presets.js";
-import { deriveTotals } from "../script.js";
+import { playersPerTeam } from "../script.js";
 import type { DraftProjection, LobbyView, MemberView, Presence, TurnClock, Viewer } from "../projection.js";
 import { project } from "../projection.js";
 import type { DraftRecord } from "../record.js";
 import { draftRecord } from "../record.js";
-import { nextAlarmAt, read, settleTurn, startTimer } from "../timer.js";
+import { allowanceFor, charge, deadline, startTimer, startTurn } from "../timer.js";
 import type { TimerRules, TimerState } from "../timer.js";
-import type { AutoFillStrategy, DraftState, Team, TurnScript } from "../types.js";
+import type {
+  ActionDefinition,
+  ActionId,
+  AutoFillStrategy,
+  DraftState,
+  Team,
+  TeamDefinition,
+  Turn,
+  TurnScript,
+} from "../types.js";
 import type { ClientMessage, RoomError, RoomPhase } from "./protocol.js";
 import type { Roster } from "./roster.js";
 import type { Suggestion } from "./suggestions.js";
@@ -47,16 +54,6 @@ import {
 import type { RoomCredentials } from "./tokens.js";
 import { cleanName } from "./names.js";
 import { credentialsMatch, generateCredentials, generateToken, normaliseCode } from "./tokens.js";
-
-/**
- * How many players a side has, taken from the format itself: a draft where each
- * team picks five heroes is played by five people. A room can say otherwise if
- * some format ever breaks that rule.
- */
-function playersPerTeam(script: DraftState["config"]["script"]): number {
-  const totals = deriveTotals(script);
-  return Math.max(1, totals.byTeam.A.picks, totals.byTeam.B.picks);
-}
 
 /**
  * How long a side's leader can be gone before the job passes to a teammate.
@@ -91,16 +88,28 @@ const FAILURE_WINDOW_MS = 5 * 60_000;
 /** Thirty seconds a turn, with a minute of reserve each for the whole draft. */
 export const DEFAULT_TIMER_RULES: TimerRules = { perTurnMs: 30_000, bankMs: 60_000 };
 
+/**
+ * Everything a room is made from.
+ *
+ * The room is handed the whole of its rules — the teams, what each action does,
+ * the turns, the pool — rather than the name of a game to look them up in. It
+ * never loads a game's pack itself, which is what keeps it able to run any of
+ * them.
+ */
 export interface CreateRoomOptions {
-  readonly script?: TurnScript;
-  readonly heroPool?: readonly string[];
-  readonly mirrorPicks?: boolean;
+  /** Which game's pack the screens should draw the pool from. The room only passes it on. */
+  readonly game: string;
+  readonly teams: readonly TeamDefinition[];
+  readonly actions: readonly ActionDefinition[];
+  readonly script: TurnScript;
+  readonly pool: readonly string[];
+  readonly mirror?: boolean;
   readonly autoFill?: AutoFillStrategy;
   readonly rules?: TimerRules;
   readonly roomId?: string;
   readonly seed?: string;
   readonly callbackUrl?: string | null;
-  /** How many players a side has. Taken from the format unless given. */
+  /** How many players a side has. Worked out from the format unless given. */
   readonly teamSize?: number;
   /** How long a finished draft is kept. Defaults to a month. */
   readonly retentionMs?: number;
@@ -114,8 +123,9 @@ export interface CreateRoomOptions {
  * through can be picked up again exactly where it was.
  */
 export interface RoomSnapshot {
-  readonly version: 1;
+  readonly version: 2;
   readonly roomId: string;
+  readonly game: string;
   readonly createdAt: number;
   readonly phase: RoomPhase;
   readonly draft: DraftState;
@@ -133,7 +143,7 @@ export interface RoomSnapshot {
   /**
    * Which sides' leaders have agreed to begin without a full room. A no-show
    * should not be able to cancel a tournament match, but one side should not be
-   * able to start on the other either, so it takes both.
+   * able to start on another either, so it takes all of them.
    */
   readonly startAnyway: Readonly<Record<Team, boolean>>;
   /** What each side has asked its own captain for. */
@@ -184,32 +194,42 @@ export class Room {
     this.#snapshot = snapshot;
   }
 
-  /** Sets up a new room: a format to play, a roster to draft from, and three links. */
+  /** Sets up a new room: a format to play, a pool to draft from, and a link for everybody. */
   static create(options: CreateRoomOptions, now: number): RoomSnapshot {
     const draft = createDraft(
       draftConfig({
-        script: options.script ?? defaultScript(),
-        heroPool: options.heroPool ?? ALL_HERO_IDS,
+        teams: options.teams,
+        actions: options.actions,
+        script: options.script,
+        pool: options.pool,
         seed: options.seed ?? generateToken(12),
-        mirrorPicks: options.mirrorPicks,
+        mirror: options.mirror,
         autoFill: options.autoFill,
       }),
     );
     if (!draft.ok) throw new Error(`Cannot create room: ${draft.error.message}`);
 
+    const teams = options.teams.map((team) => team.id);
+    const credentials = options.credentials ?? generateCredentials(teams);
+    if (teams.some((team) => typeof credentials.codes[team] !== "string")) {
+      throw new Error("Cannot create room: every team needs a code.");
+    }
+
     const rules = options.rules ?? DEFAULT_TIMER_RULES;
+    const { script, actions } = draft.value.config;
     return {
-      version: 1,
+      version: 2,
       roomId: options.roomId ?? generateToken(8),
+      game: options.game,
       createdAt: now,
       phase: "lobby",
       draft: draft.value,
-      timer: startTimer(rules, now),
+      timer: startTimer(rules, teams, now),
       rules,
-      credentials: options.credentials ?? generateCredentials(),
+      credentials,
       failures: { count: 0, since: now },
-      roster: emptyRoster(options.teamSize ?? playersPerTeam(draft.value.config.script)),
-      startAnyway: { A: false, B: false },
+      roster: emptyRoster(teams, options.teamSize ?? playersPerTeam(script, actions)),
+      startAnyway: Object.fromEntries(teams.map((team) => [team, false])),
       suggestions: [],
       completedAt: null,
       retentionMs: options.retentionMs ?? RETAIN_AFTER_COMPLETE_MS,
@@ -244,24 +264,35 @@ export class Room {
     if (this.lockedOut(now)) return null;
 
     const code = normaliseCode(credential);
-    if (credentialsMatch(code, credentials.A)) return this.#accept("A", now);
-    if (credentialsMatch(code, credentials.B)) return this.#accept("B", now);
+    // Every code is compared, rather than stopping at the first that fits, so
+    // how long a refusal takes says nothing about how many teams there are
+    // before the right one.
+    let seat: Team | null = null;
+    for (const [team, expected] of Object.entries(credentials.codes)) {
+      if (credentialsMatch(code, expected)) seat = team;
+    }
+    if (seat !== null) return this.#accept(seat, now);
 
     this.#recordFailure(now);
     return null;
   }
 
   /**
-   * Whether the draft may begin: either everybody is here and ready, or both
-   * sides' leaders have agreed to start without them. Either way both sides
-   * need somebody to do the picking.
+   * Whether the draft may begin: either everybody is here and ready, or every
+   * side's leader has agreed to start without them. Either way every side
+   * needs somebody to do the choosing.
    */
   canBegin(): boolean {
     const { roster, startAnyway } = this.#snapshot;
-    const bothLed = roster.leaders.A !== null && roster.leaders.B !== null;
-    if (!bothLed) return false;
+    const teams = this.#teams();
+    if (!teams.every((team) => typeof roster.leaders[team] === "string")) return false;
     if (everyoneReady(roster)) return true;
-    return startAnyway.A && startAnyway.B;
+    return teams.every((team) => startAnyway[team] === true);
+  }
+
+  /** The teams in this room, in the order the format defines them. */
+  #teams(): readonly Team[] {
+    return this.#snapshot.draft.config.teams.map((team) => team.id);
   }
 
   /** True while the room is refusing code attempts after too many wrong ones. */
@@ -375,9 +406,9 @@ export class Room {
     const connected = this.#connectedIds();
     const here = (team: Team): boolean => {
       const leader = this.#snapshot.roster.leaders[team];
-      return leader !== null && connected.has(leader);
+      return typeof leader === "string" && connected.has(leader);
     };
-    return { A: here("A") ? "connected" : "disconnected", B: here("B") ? "connected" : "disconnected" };
+    return Object.fromEntries(this.#teams().map((team) => [team, here(team) ? "connected" : "disconnected"]));
   }
 
   /** The room as everybody in it should see it: who is here, ready, and leading. */
@@ -414,7 +445,11 @@ export class Room {
   #maybeStart(now: number): RoomOutcome {
     if (this.#snapshot.phase !== "lobby") return { events: [], error: null, changed: true };
     if (!this.canBegin()) return { events: [], error: null, changed: true };
-    this.#snapshot = { ...this.#snapshot, phase: "drafting", timer: startTimer(this.#snapshot.rules, now) };
+    this.#snapshot = {
+      ...this.#snapshot,
+      phase: "drafting",
+      timer: startTimer(this.#snapshot.rules, this.#teams(), now),
+    };
     return { events: [], error: null, changed: true };
   }
 
@@ -448,15 +483,19 @@ export class Room {
     }
 
     if (message.t === "suggest") {
-      if (!this.#snapshot.draft.config.heroPool.includes(message.heroId)) {
-        return refuse("unknown_hero", `${message.heroId} is not in this draft.`, overdue);
+      const { pool, actions } = this.#snapshot.draft.config;
+      if (!pool.includes(message.itemId)) {
+        return refuse("unknown_item", `${message.itemId} is not in this draft.`, overdue);
+      }
+      if (!actions.some((action) => action.id === message.intent)) {
+        return refuse("unknown_action", `This draft has no "${message.intent}".`, overdue);
       }
       this.#snapshot = {
         ...this.#snapshot,
         suggestions: toggleSuggestion(this.#snapshot.suggestions, {
           memberId: viewer.memberId,
           team: viewer.team,
-          heroId: message.heroId,
+          itemId: message.itemId,
           intent: message.intent,
         }),
       };
@@ -485,28 +524,27 @@ export class Room {
     }
 
     if (this.#snapshot.phase === "lobby") {
-      return refuse("not_started", "The draft has not started: both captains must connect.", overdue);
+      return refuse("not_started", "The draft has not started yet.", overdue);
     }
     if (this.#snapshot.phase === "complete") {
       return refuse("draft_complete", "The draft is over.", overdue);
     }
 
     if (this.#snapshot.roster.leaders[viewer.team] !== viewer.memberId) {
-      return refuse("not_your_call", "Your side's leader makes the picks.", overdue);
+      return refuse("not_your_call", "Your side's leader does the choosing.", overdue);
     }
 
     const before = this.#snapshot.draft;
     const result =
       message.t === "stage"
-        ? stage(before, viewer.team, message.heroId)
+        ? stage(before, viewer.team, message.itemId)
         : message.t === "unstage"
-          ? unstage(before, viewer.team, message.heroId)
+          ? unstage(before, viewer.team, message.itemId)
           : commit(before, viewer.team, now);
 
     if (!result.ok) return refuse(result.error.code, result.error.message, overdue);
 
-    const committed = message.t === "confirm";
-    this.#advance(result.value, committed ? now : null);
+    this.#advance(result.value, message.t === "confirm" ? { team: viewer.team, at: now } : null);
     return {
       events: [...overdue.events, ...diffEvents(before, this.#snapshot.draft)],
       error: null,
@@ -532,14 +570,14 @@ export class Room {
     let resolved = false;
 
     for (;;) {
-      const turn = currentTurn(this.#snapshot.draft);
-      if (turn === null) break;
-      const deadline = nextAlarmAt(this.#snapshot.rules, this.#snapshot.timer, turn.team);
-      if (now < deadline) break;
+      // Whoever's time runs out first is settled first, so on a turn several
+      // teams play, each is charged at the moment their own clock ran out.
+      const due = this.#nextDeadline();
+      if (due === null || now < due.at) break;
 
-      const auto = resolveTimeout(this.#snapshot.draft, deadline);
+      const auto = resolveTimeout(this.#snapshot.draft, due.at, [due.team]);
       if (!auto.ok) break;
-      this.#advance(auto.value, deadline);
+      this.#advance(auto.value, due);
       resolved = true;
     }
 
@@ -547,12 +585,31 @@ export class Room {
     return { events: diffEvents(before, this.#snapshot.draft), error: null, changed: true };
   }
 
-  /** Takes the draft forward, charging the clock when a turn has genuinely ended. */
-  #advance(draft: DraftState, turnEndedAt: number | null): void {
+  /** The team whose time runs out soonest this turn, and when. */
+  #nextDeadline(): { team: Team; at: number } | null {
+    const turn = currentTurn(this.#snapshot.draft);
+    if (turn === null) return null;
+    const allowance = allowanceFor(this.#snapshot.rules, turn);
+    let soonest: { team: Team; at: number } | null = null;
+    for (const team of waitingOn(this.#snapshot.draft)) {
+      const at = deadline(allowance, this.#snapshot.timer, team);
+      if (soonest === null || at < soonest.at) soonest = { team, at };
+    }
+    return soonest;
+  }
+
+  /**
+   * Takes the draft forward. When a team settled its part of a turn, whatever
+   * they overran by comes out of their reserve; when that settled the whole
+   * turn, the next one's clock starts.
+   */
+  #advance(draft: DraftState, settled: { team: Team; at: number } | null): void {
     let timer = this.#snapshot.timer;
-    if (turnEndedAt !== null) {
-      const ended = draft.committed.at(-1);
-      if (ended !== undefined) timer = settleTurn(this.#snapshot.rules, timer, ended.team, turnEndedAt);
+    const previous = this.#snapshot.draft;
+    const turn: Turn | null = currentTurn(previous);
+    if (settled !== null && turn !== null) {
+      timer = charge(allowanceFor(this.#snapshot.rules, turn), timer, settled.team, settled.at);
+      if (draft.turnIndex !== previous.turnIndex) timer = startTurn(timer, settled.at);
     }
     const complete = isComplete(draft);
     this.#snapshot = {
@@ -560,7 +617,8 @@ export class Room {
       draft,
       timer,
       phase: complete ? "complete" : this.#snapshot.phase,
-      completedAt: complete && this.#snapshot.completedAt === null ? (turnEndedAt ?? Date.now()) : this.#snapshot.completedAt,
+      completedAt:
+        complete && this.#snapshot.completedAt === null ? (settled?.at ?? Date.now()) : this.#snapshot.completedAt,
     };
   }
 
@@ -578,9 +636,7 @@ export class Room {
     // Finished: wake once, long after anybody cares, to clear itself out.
     if (phase === "complete") return completedAt === null ? null : completedAt + retentionMs;
 
-    const turn = currentTurn(this.#snapshot.draft);
-    if (turn === null) return null;
-    return nextAlarmAt(this.#snapshot.rules, this.#snapshot.timer, turn.team);
+    return this.#nextDeadline()?.at ?? null;
   }
 
   /**
@@ -615,16 +671,19 @@ export class Room {
     return latest;
   }
 
-  clock(now: number): TurnClock | null {
+  clock(): TurnClock | null {
     if (this.#snapshot.phase !== "drafting") return null;
     const turn = currentTurn(this.#snapshot.draft);
     if (turn === null) return null;
-    const reading = read(this.#snapshot.rules, this.#snapshot.timer, turn.team, now);
+    const allowanceMs = allowanceFor(this.#snapshot.rules, turn);
+    const { timer } = this.#snapshot;
     return {
-      turnStartedAt: this.#snapshot.timer.turnStartedAt,
-      perTurnMs: this.#snapshot.rules.perTurnMs,
-      bank: this.#snapshot.timer.bank,
-      expiresAt: reading.expiresAt,
+      turnStartedAt: timer.turnStartedAt,
+      allowanceMs,
+      bank: timer.bank,
+      deadlines: Object.fromEntries(
+        waitingOn(this.#snapshot.draft).map((team) => [team, deadline(allowanceMs, timer, team)]),
+      ),
     };
   }
 
@@ -656,9 +715,10 @@ export class Room {
   projection(viewer: Viewer, now: number): DraftProjection {
     return project({
       state: this.#snapshot.draft,
+      game: this.#snapshot.game,
       viewer,
       presence: this.presence(),
-      clock: this.clock(now),
+      clock: this.clock(),
       lobby: this.lobby(viewer.role === "player" ? viewer.memberId : null),
       ...this.#suggestionsFor(viewer),
       startedAt: this.#snapshot.createdAt,
@@ -672,16 +732,16 @@ export class Room {
    */
   #suggestionsFor(viewer: Viewer): {
     suggestions: ReturnType<typeof forTeam>;
-    yourSuggestions: Record<string, "want" | "ban">;
+    yourSuggestions: Record<string, ActionId>;
   } {
     if (viewer.role !== "player") return { suggestions: [], yourSuggestions: {} };
 
     const nameOf = (memberId: string): string => findMember(this.#snapshot.roster, memberId)?.name ?? "Someone";
-    const available = (heroId: string): boolean => availability(this.#snapshot.draft, heroId).state === "available";
+    const available = (itemId: string): boolean => availability(this.#snapshot.draft, itemId).state === "available";
 
-    const yours: Record<string, "want" | "ban"> = {};
+    const yours: Record<string, ActionId> = {};
     for (const suggestion of this.#snapshot.suggestions) {
-      if (suggestion.memberId === viewer.memberId) yours[suggestion.heroId] = suggestion.intent;
+      if (suggestion.memberId === viewer.memberId) yours[suggestion.itemId] = suggestion.intent;
     }
 
     return {

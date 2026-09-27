@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { clock, describeTurn, duration, verbFor } from "../client/src/format.js";
+import { clock, describeTurn, duration, slotOf, tally, verbFor } from "../client/src/format.js";
+import { ACTIONS, TEAMS } from "./helpers.js";
 
 describe("clock", () => {
   it("counts tenths under ten seconds", () => {
@@ -47,16 +48,34 @@ describe("duration", () => {
 
 describe("describeTurn", () => {
   it("names the team and the action", () => {
-    expect(describeTurn({ team: "A", action: "ban", count: 1 })).toBe("Team A bans");
-    expect(describeTurn({ team: "B", action: "pick", count: 1 })).toBe("Team B picks");
+    expect(describeTurn({ teams: ["A"], action: "ban", count: 1 }, TEAMS, ACTIONS)).toBe("Team A · Ban");
+    expect(describeTurn({ teams: ["B"], action: "pick", count: 1 }, TEAMS, ACTIONS)).toBe("Team B · Pick");
   });
 
   it("says how many when a turn takes more than one", () => {
-    expect(describeTurn({ team: "B", action: "pick", count: 2 })).toBe("Team B picks 2");
+    expect(describeTurn({ teams: ["B"], action: "pick", count: 2 }, TEAMS, ACTIONS)).toBe("Team B · Pick 2");
+  });
+
+  it("names every team on a blind turn, and nobody on a turn the draft plays", () => {
+    expect(describeTurn({ teams: ["A", "B"], action: "ban", count: 1 }, TEAMS, ACTIONS)).toBe("Team A + Team B · Ban");
+    expect(describeTurn({ teams: [], action: "pick", count: 1 }, TEAMS, ACTIONS)).toBe("Remaining · Pick");
   });
 
   it("gives the button its verb", () => {
-    expect(verbFor({ team: "A", action: "ban", count: 1 })).toBe("Ban");
-    expect(verbFor({ team: "A", action: "pick", count: 2 })).toBe("Pick");
+    expect(verbFor({ teams: ["A"], action: "ban", count: 1 }, ACTIONS)).toBe("Ban");
+    expect(verbFor({ teams: ["A"], action: "pick", count: 2 }, ACTIONS)).toBe("Pick");
+  });
+});
+
+describe("colours and counts", () => {
+  it("colours a team by its place, not its name", () => {
+    expect(slotOf(TEAMS, "A")).toBe("t0");
+    expect(slotOf(TEAMS, "B")).toBe("t1");
+    expect(slotOf([...TEAMS, { id: "C", name: "C" }, { id: "D", name: "D" }, { id: "E", name: "E" }], "E")).toBe("t0");
+  });
+
+  it("counts an action in words", () => {
+    expect(tally(4, ACTIONS[0]!)).toBe("4 bans");
+    expect(tally(1, ACTIONS[1]!)).toBe("1 pick");
   });
 });

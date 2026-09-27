@@ -1,20 +1,20 @@
 /**
- * Take a folder of hero portraits and make them usable by the draft screen.
+ * Take a folder of pictures and make them usable by the draft screen.
  *
- *   node scripts/import-portraits.mjs "~/Hero Portraits"
- *   node scripts/import-portraits.mjs "~/Hero Portraits" --dry-run
+ *   node scripts/import-portraits.mjs vainglory "~/Hero Portraits"
+ *   node scripts/import-portraits.mjs vainglory "~/Hero Portraits" --dry-run
  *
  * A folder of art exported from somewhere else is never quite ready to ship:
  * the pictures come at whatever size they happened to be saved at, a few are a
  * pixel or two off square, and together they weigh far more than anybody on a
- * phone should have to download to look at a hero grid. This squares them all
- * to one size, re-encodes them, and writes the result into the app.
+ * phone should have to download to look at a grid. This squares them all to
+ * one size, re-encodes them, and writes the result into the app.
  *
- * Files are matched to heroes by name, so `sanfeng.png` finds `san-feng`. A
- * hero with no portrait keeps `image: null` and goes on being drawn as a name,
- * which is what the grid already does — a missing picture is not a broken one.
- * Anything in the folder that is not one of our heroes is left alone and
- * reported, rather than guessed at.
+ * Files are matched to the game's catalog by name, so `sanfeng.png` finds
+ * `san-feng`. Anything with no picture keeps `image: null` and goes on being
+ * drawn as a name, which is what the grid already does — a missing picture is
+ * not a broken one. Anything in the folder that is not in the catalog is left
+ * alone and reported, rather than guessed at.
  */
 
 import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
@@ -22,17 +22,17 @@ import path from "node:path";
 import sharp from "sharp";
 
 const args = process.argv.slice(2);
-const source = args.find((arg) => !arg.startsWith("--"));
+const [game, source] = args.filter((arg) => !arg.startsWith("--"));
 const dryRun = args.includes("--dry-run");
 
-if (source === undefined) {
-  console.error('Usage: node scripts/import-portraits.mjs <folder> [--dry-run]');
+if (game === undefined || source === undefined) {
+  console.error("Usage: node scripts/import-portraits.mjs <game> <folder> [--dry-run]");
   process.exit(2);
 }
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const DATA = path.join(ROOT, "data/heroes.json");
-const OUT_DIR = path.join(ROOT, "client/public/heroes");
+const DATA = path.join(ROOT, "games", game, "catalog.json");
+const OUT_DIR = path.join(ROOT, "client/public/games", game);
 
 /**
  * How big a portrait is written.
@@ -48,43 +48,46 @@ const SHARP_ENOUGH = 200;
 
 const slug = (value) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-/** `sanfeng` and `san-feng` are the same hero written two ways. */
+/** `sanfeng` and `san-feng` are the same thing written two ways. */
 const squash = (value) => slug(value).replace(/-/g, "");
 
 const file = JSON.parse(await readFile(DATA, "utf8"));
-const heroes = file.heroes;
+const items = file.items;
 
 const entries = (await readdir(source, { withFileTypes: true }))
   .filter((entry) => entry.isFile() && /\.(png|jpe?g|webp)$/i.test(entry.name))
   .map((entry) => entry.name);
 
 // Match on the squashed name, so a hyphen either side of the join is no obstacle.
-const byName = new Map(heroes.map((hero) => [squash(hero.id), hero]));
+const byName = new Map(items.map((item) => [squash(item.id), item]));
 const matched = new Map();
 const unmatched = [];
 
 for (const name of entries) {
   const key = squash(path.basename(name, path.extname(name)));
-  const hero = byName.get(key);
-  if (hero === undefined) unmatched.push(name);
-  else matched.set(hero.id, name);
+  const item = byName.get(key);
+  if (item === undefined) unmatched.push(name);
+  else matched.set(item.id, name);
 }
 
-const missing = heroes.filter((hero) => !matched.has(hero.id)).map((hero) => hero.id);
+const missing = items.filter((item) => !matched.has(item.id)).map((item) => item.id);
 
-console.log(`${matched.size} of ${heroes.length} heroes have a portrait.`);
-if (missing.length > 0) console.log(`no portrait: ${missing.join(", ")}`);
-if (unmatched.length > 0) console.log(`not one of our heroes, skipped: ${unmatched.join(", ")}`);
+console.log(`${matched.size} of ${items.length} have a picture.`);
+if (missing.length > 0) console.log(`no picture: ${missing.join(", ")}`);
+if (unmatched.length > 0) console.log(`not in the ${game} catalog, skipped: ${unmatched.join(", ")}`);
 
 if (dryRun) {
   console.log("\n--dry-run: nothing written.");
   process.exit(0);
 }
 
-// Start from empty, so a portrait dropped from a later export does not linger
-// as a file nothing references any more.
-await rm(OUT_DIR, { recursive: true, force: true });
+// Start from empty, so a picture dropped from a later export does not linger
+// as a file nothing references any more. Only webp files this script wrote are
+// cleared; anything else in the folder was put there some other way.
 await mkdir(OUT_DIR, { recursive: true });
+for (const old of await readdir(OUT_DIR)) {
+  if (old.endsWith(".webp")) await rm(path.join(OUT_DIR, old));
+}
 
 const soft = [];
 let before = 0;
@@ -111,11 +114,12 @@ for (const [id, name] of matched) {
   }
 }
 
-// The data file records where a portrait lives, and nothing else about it. A
-// hero without one keeps null rather than a path to a picture that is not there.
-file.heroes = heroes.map((hero) => ({
-  ...hero,
-  image: matched.has(hero.id) ? `/heroes/${hero.id}.webp` : null,
+// The catalog records where a picture lives, and nothing else about it.
+// Anything without one keeps null rather than a path to a picture that is not
+// there.
+file.items = items.map((item) => ({
+  ...item,
+  image: matched.has(item.id) ? `/games/${game}/${item.id}.webp` : null,
 }));
 file.portraits = {
   count: matched.size,
@@ -123,14 +127,14 @@ file.portraits = {
   source: path.basename(source),
   note:
     missing.length === 0
-      ? "Every hero has a portrait."
-      : `No portrait yet for: ${missing.join(", ")}. Those heroes are drawn as a name.`,
+      ? "Everything has a picture."
+      : `No picture yet for: ${missing.join(", ")}. Those are drawn as a name.`,
 };
 
 await writeFile(DATA, `${JSON.stringify(file, null, 2)}\n`);
 
 const kb = (bytes) => `${(bytes / 1024).toFixed(0)} KB`;
-console.log(`\nwrote ${matched.size} portraits to client/public/heroes`);
+console.log(`\nwrote ${matched.size} pictures to ${path.relative(ROOT, OUT_DIR)}`);
 console.log(`  ${kb(before)} in, ${kb(after)} out (${(after / matched.size / 1024).toFixed(1)} KB each)`);
 if (soft.length > 0) {
   console.log(`\nSmaller than ${SHARP_ENOUGH}px, so stretched to fit and a little soft:`);

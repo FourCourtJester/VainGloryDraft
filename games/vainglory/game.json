@@ -1,0 +1,35 @@
+{
+  "id": "vainglory",
+  "name": "Vainglory",
+  "terms": { "item": "hero", "items": "heroes" },
+  "teams": [
+    { "id": "A", "name": "Team A" },
+    { "id": "B", "name": "Team B" }
+  ],
+  "actions": [
+    { "id": "ban", "label": "Ban", "past": "banned", "effect": "remove" },
+    { "id": "pick", "label": "Pick", "past": "picked", "effect": "take" }
+  ],
+  "defaults": {
+    "preset": "vg-5v5-standard",
+    "mirror": false,
+    "perTurnMs": 30000,
+    "bankMs": 60000
+  },
+  "presets": [
+    {
+      "id": "vg-5v5-standard",
+      "name": "5v5 Standard",
+      "official": true,
+      "script": "A ban, B ban, A ban, B ban, A pick, B pick x2, A pick x2, B pick x2, A pick x2, B pick",
+      "notes": "Two bans each, then a snake pick order: 1-2-2-2-2-1. Five picks a side. A team picking twice in a row does both in one turn: they choose two heroes and lock them in together, on a single clock."
+    },
+    {
+      "id": "vg-3v3-standard",
+      "name": "3v3 Standard",
+      "official": true,
+      "script": "A ban, B ban, A ban, B ban, A pick, B pick x2, A pick x2, B pick",
+      "notes": "The 5v5 order with the pick snake cut short at three a side: two bans each, then 1-2-2-1. Team A picks first, team B picks last. A team picking twice in a row does both in one turn, on a single clock."
+    }
+  ]
+}

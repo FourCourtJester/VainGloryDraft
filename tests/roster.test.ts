@@ -18,7 +18,7 @@ import type { Roster } from "../src/room/roster.js";
 const T0 = 1_700_000_000_000;
 
 function withTeams(sizeA: number, sizeB: number, teamSize = 3): Roster {
-  let roster = emptyRoster(teamSize);
+  let roster = emptyRoster(["A", "B"], teamSize);
   for (let i = 0; i < sizeA; i++) roster = join(roster, { id: `a${i}`, name: `A${i}`, team: "A" }, T0 + i);
   for (let i = 0; i < sizeB; i++) roster = join(roster, { id: `b${i}`, name: `B${i}`, team: "B" }, T0 + i);
   return roster;

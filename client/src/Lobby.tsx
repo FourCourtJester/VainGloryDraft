@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 import type { DraftProjection } from "../../src/projection.js";
 import type { Team } from "../../src/types.js";
+import { slotOf, teamName } from "./format.js";
 
 interface Props {
   readonly projection: DraftProjection;
@@ -11,8 +12,8 @@ interface Props {
 }
 
 /**
- * The room before the draft: both squads arriving, saying they are ready, and
- * settling who is going to do the picking.
+ * The room before the draft: every squad arriving, saying they are ready, and
+ * settling who is going to do the choosing.
  *
  * Nothing here costs anybody time. The clock does not start until the last
  * person has said they are ready, so a team still finding their headsets is not
@@ -23,7 +24,8 @@ export function Lobby({ projection, onReady, onHandOver, onClaimLead, onStartAny
   const you = lobby.members.find((member) => member.you);
   const waitingFor = lobby.members.filter((member) => !member.ready).length;
   const agreed = lobby.startAnyway;
-  const otherSide = you === undefined ? null : you.team === "A" ? "B" : "A";
+  const others = you === undefined ? [] : projection.teams.filter((team) => team.id !== you.team);
+  const othersAgreed = others.length > 0 && others.every((team) => agreed[team.id] === true);
 
   return (
     <section className="lobby">
@@ -32,15 +34,15 @@ export function Lobby({ projection, onReady, onHandOver, onClaimLead, onStartAny
         <span className="note">
           {lobby.everyoneHere
             ? `${waitingFor} still to confirm`
-            : `${lobby.members.length} of ${lobby.teamSize * 2} here`}
+            : `${lobby.members.length} of ${lobby.teamSize * projection.teams.length} here`}
         </span>
       </div>
 
       <div className="squads">
-        {(["A", "B"] as const).map((team) => (
+        {projection.teams.map((team) => (
           <Squad
-            key={team}
-            team={team}
+            key={team.id}
+            team={team.id}
             projection={projection}
             you={you}
             onHandOver={onHandOver}
@@ -64,22 +66,22 @@ export function Lobby({ projection, onReady, onHandOver, onClaimLead, onStartAny
         </div>
       )}
 
-      {/* A no-show should not be able to cancel a match, so the two leaders can
-          agree to begin without a full room. It takes both, so neither side can
-          start on the other. */}
-      {you?.leader === true && !lobby.everyoneHere && otherSide !== null && (
+      {/* A no-show should not be able to cancel a match, so the leaders can
+          agree to begin without a full room. It takes all of them, so no side
+          can start on another. */}
+      {you?.leader === true && !lobby.everyoneHere && others.length > 0 && (
         <div className="start-anyway">
           <button
             type="button"
-            className={agreed[you.team] ? "claim agreed" : "claim"}
-            onClick={() => onStartAnyway(!agreed[you.team])}
+            className={agreed[you.team] === true ? "claim agreed" : "claim"}
+            onClick={() => onStartAnyway(agreed[you.team] !== true)}
           >
-            {agreed[you.team] ? "Waiting for the other side" : "Begin without a full room"}
+            {agreed[you.team] === true ? "Waiting for the other side" : "Begin without a full room"}
           </button>
           <span className="note">
-            {agreed[otherSide]
-              ? "The other side has agreed. Confirm and the draft begins."
-              : "Both sides' leaders have to agree. Use this for a no-show."}
+            {othersAgreed
+              ? "Everybody else has agreed. Confirm and the draft begins."
+              : "Every side's leader has to agree. Use this for a no-show."}
           </span>
         </div>
       )}
@@ -103,8 +105,8 @@ function Squad({ team, projection, you, onHandOver, onClaimLead }: SquadProps): 
   const leaderGone = members.some((member) => member.leader && !member.connected);
 
   return (
-    <section className={`squad team-${team}`}>
-      <h3>Team {team}</h3>
+    <section className={`squad ${slotOf(projection.teams, team)}`}>
+      <h3>{teamName(projection.teams, team)}</h3>
       <ul>
         {members.map((member) => (
           <li key={member.id} className={member.connected ? "" : "away"}>
@@ -113,8 +115,8 @@ function Squad({ team, projection, you, onHandOver, onClaimLead }: SquadProps): 
               {member.name}
               {member.you && <em> (you)</em>}
             </span>
-            {member.leader && <span className="tag lead">picks</span>}
-            {/* Only the person currently picking can pass the job on. */}
+            {member.leader && <span className="tag lead">chooses</span>}
+            {/* Only the person currently choosing can pass the job on. */}
             {you?.leader === true && yourSide && !member.leader && (
               <button type="button" className="hand-over" onClick={() => onHandOver(member.id)}>
                 hand over
@@ -130,7 +132,7 @@ function Squad({ team, projection, you, onHandOver, onClaimLead }: SquadProps): 
       </ul>
       {yourSide && leaderGone && you?.leader !== true && (
         <button type="button" className="claim" onClick={onClaimLead}>
-          Take over picking
+          Take over choosing
         </button>
       )}
     </section>

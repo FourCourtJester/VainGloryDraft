@@ -5,34 +5,40 @@ import { parseAutoFill, parseTimerRules } from "../src/room/options.js";
 import { DEFAULT_TIMER_RULES, Room } from "../src/room/room.js";
 import type { RoomSnapshot } from "../src/room/room.js";
 import { credentialsMatch, generateCode, generateCredentials, generateToken, normaliseCode } from "../src/room/tokens.js";
-import { parseScript } from "../src/script.js";
 import type { Viewer } from "../src/projection.js";
+import { ACTIONS, TEAMS, script } from "./helpers.js";
 
 const T0 = 1_700_000_000_000;
 // `seat` scopes a player's id to their side, so that is what a viewer carries.
 const CAPTAIN_A: Viewer = { role: "player", team: "A", memberId: "A:a1" };
 const CAPTAIN_B: Viewer = { role: "player", team: "B", memberId: "B:b1" };
 const SPECTATOR: Viewer = { role: "spectator" };
-const CREDS = { A: "AAAAAA", B: "BBBBBB", spectator: "spectator-token-ssssssss" };
+const CODES = { A: "AAAAAA", B: "BBBBBB" };
+const CREDS = { codes: CODES, spectator: "spectator-token-ssssssss" };
 
-function snapshot(overrides: Parameters<typeof Room.create>[0] = {}): RoomSnapshot {
-  return Room.create(
-    {
-      script: parseScript("Aban, Bban, Apick, Bpick x2, Apick"),
-      heroPool: ["a", "b", "c", "d", "e", "f", "g"],
-      autoFill: "lowestIndex",
-      seed: "seed",
-      credentials: CREDS,
-      roomId: "room-1",
-      teamSize: 1,
-      ...overrides,
-    },
-    T0,
-  );
+type Overrides = Partial<Parameters<typeof Room.create>[0]>;
+
+function snapshotOptions(): Parameters<typeof Room.create>[0] {
+  return {
+    game: "test",
+    teams: TEAMS,
+    actions: ACTIONS,
+    script: script("Aban, Bban, Apick, Bpick x2, Apick"),
+    pool: ["a", "b", "c", "d", "e", "f", "g"],
+    autoFill: "lowestIndex",
+    seed: "seed",
+    credentials: CREDS,
+    roomId: "room-1",
+    teamSize: 1,
+  };
+}
+
+function snapshot(overrides: Overrides = {}): RoomSnapshot {
+  return Room.create({ ...snapshotOptions(), ...overrides }, T0);
 }
 
 /** Seats one player per side and a spectator, without readying anybody up. */
-function seatedRoom(overrides: Parameters<typeof Room.create>[0] = {}): Room {
+function seatedRoom(overrides: Overrides = {}): Room {
   const room = new Room(snapshot(overrides));
   room.attach("c-a1", room.seat("A", "a1", "Ana", T0), T0);
   room.attach("c-b1", room.seat("B", "b1", "Ben", T0), T0);
@@ -41,7 +47,7 @@ function seatedRoom(overrides: Parameters<typeof Room.create>[0] = {}): Room {
 }
 
 /** The same, with everybody ready, so the draft is under way. */
-function liveRoom(overrides: Parameters<typeof Room.create>[0] = {}): Room {
+function liveRoom(overrides: Overrides = {}): Room {
   const room = seatedRoom(overrides);
   room.command(CAPTAIN_A, { t: "ready", ready: true }, T0);
   room.command(CAPTAIN_B, { t: "ready", ready: true }, T0);
@@ -49,10 +55,13 @@ function liveRoom(overrides: Parameters<typeof Room.create>[0] = {}): Room {
 }
 
 function play(room: Room, now: number, ...heroes: string[]): void {
-  const team = currentTurn(room.snapshot.draft)!.team;
-  const viewer: Viewer = team === "A" ? CAPTAIN_A : CAPTAIN_B;
+  const team = currentTurn(room.snapshot.draft)!.teams[0]!;
+  playAs(room, team === "A" ? CAPTAIN_A : CAPTAIN_B, now, ...heroes);
+}
+
+function playAs(room: Room, viewer: Viewer, now: number, ...heroes: string[]): void {
   for (const hero of heroes) {
-    const result = room.command(viewer, { t: "stage", heroId: hero }, now);
+    const result = room.command(viewer, { t: "stage", itemId: hero }, now);
     if (result.error !== null) throw new Error(result.error.message);
   }
   const confirmed = room.command(viewer, { t: "confirm" }, now);
@@ -62,8 +71,8 @@ function play(room: Room, now: number, ...heroes: string[]): void {
 describe("getting into a room", () => {
   it("gives each credential its seat and turns away anything else", () => {
     const room = new Room(snapshot());
-    expect(room.authenticate(CREDS.A)).toBe("A");
-    expect(room.authenticate(CREDS.B)).toBe("B");
+    expect(room.authenticate(CODES.A)).toBe("A");
+    expect(room.authenticate(CODES.B)).toBe("B");
     expect(room.authenticate(CREDS.spectator)).toBe("spectator");
     expect(room.authenticate("QQQQQQ")).toBeNull();
     expect(room.authenticate("")).toBeNull();
@@ -82,9 +91,15 @@ describe("getting into a room", () => {
   });
 
   it("gives every room its own credentials", () => {
-    const rooms = Array.from({ length: 40 }, () => generateCredentials());
-    expect(new Set(rooms.map((r) => r.A)).size).toBe(40);
-    expect(new Set(rooms.flatMap((r) => [r.A, r.B])).size).toBe(80);
+    const rooms = Array.from({ length: 40 }, () => generateCredentials(["A", "B"]));
+    expect(new Set(rooms.map((r) => r.codes.A)).size).toBe(40);
+    expect(new Set(rooms.flatMap((r) => [r.codes.A, r.codes.B])).size).toBe(80);
+  });
+
+  it("hands out a code for every team, however many there are", () => {
+    const credentials = generateCredentials(["Red", "Green", "Blue"]);
+    expect(Object.keys(credentials.codes)).toEqual(["Red", "Green", "Blue"]);
+    expect(new Set(Object.values(credentials.codes)).size).toBe(3);
   });
 
   it("does not repeat spectator tokens across rooms", () => {
@@ -99,10 +114,10 @@ describe("getting into a room", () => {
 
   it("stays usable after a reconnect — credentials are reusable by decision", () => {
     const room = new Room(snapshot());
-    expect(room.authenticate(CREDS.A)).toBe("A");
+    expect(room.authenticate(CODES.A)).toBe("A");
     room.attach("c1", room.seat("A", "a1", "Ana", T0), T0);
     room.detach("c1", T0);
-    expect(room.authenticate(CREDS.A)).toBe("A");
+    expect(room.authenticate(CODES.A)).toBe("A");
   });
 });
 
@@ -112,7 +127,7 @@ describe("guessing at a captain's code", () => {
     for (let i = 0; i < 8; i++) expect(room.authenticate(`WRONG${i}`, T0)).toBeNull();
     expect(room.lockedOut(T0)).toBe(true);
     // Even the right code is refused while the room is closed to guessing.
-    expect(room.authenticate(CREDS.A, T0)).toBeNull();
+    expect(room.authenticate(CODES.A, T0)).toBeNull();
   });
 
   it("lets spectators in regardless, so one guesser cannot shut out the room", () => {
@@ -127,13 +142,13 @@ describe("guessing at a captain's code", () => {
     for (let i = 0; i < 8; i++) room.authenticate(`WRONG${i}`, T0);
     expect(room.lockedOut(T0 + 4 * 60_000)).toBe(true);
     expect(room.lockedOut(T0 + 6 * 60_000)).toBe(false);
-    expect(room.authenticate(CREDS.A, T0 + 6 * 60_000)).toBe("A");
+    expect(room.authenticate(CODES.A, T0 + 6 * 60_000)).toBe("A");
   });
 
   it("forgives a captain who fat-fingers their own code", () => {
     const room = new Room(snapshot());
     for (let i = 0; i < 5; i++) room.authenticate("WRONGX", T0);
-    expect(room.authenticate(CREDS.A, T0)).toBe("A");
+    expect(room.authenticate(CODES.A, T0)).toBe("A");
     // Getting in clears the count, so their earlier typos cost the next person nothing.
     for (let i = 0; i < 7; i++) room.authenticate("WRONGX", T0);
     expect(room.lockedOut(T0)).toBe(false);
@@ -170,7 +185,7 @@ describe("the lobby", () => {
     expect(room.phase).toBe("lobby");
     // The room still wakes once, but only to check whether anybody ever came.
     expect(room.alarmAt()).toBe(T0 + 6 * 60 * 60_000);
-    expect(room.clock(T0 + 600_000)).toBeNull();
+    expect(room.clock()).toBeNull();
 
     // Ten minutes waiting around costs nobody anything.
     room.tick(T0 + 600_000);
@@ -201,7 +216,7 @@ describe("the lobby", () => {
 
   it("refuses draft commands before the draft starts", () => {
     const room = seatedRoom();
-    expect(room.command(CAPTAIN_A, { t: "stage", heroId: "a" }, T0).error?.code).toBe("not_started");
+    expect(room.command(CAPTAIN_A, { t: "stage", itemId: "a" }, T0).error?.code).toBe("not_started");
   });
 
   it("treats a player's second device as the same player", () => {
@@ -263,8 +278,8 @@ describe("who leads a side", () => {
       room.command({ role: "player", team: m.team, memberId: m.id }, { t: "ready", ready: true }, T0);
     }
     expect(room.phase).toBe("drafting");
-    expect(room.command(asPlayer("A", "a2"), { t: "stage", heroId: "a" }, T0).error?.code).toBe("not_your_call");
-    expect(room.command(asPlayer("A", "a1"), { t: "stage", heroId: "a" }, T0).error).toBeNull();
+    expect(room.command(asPlayer("A", "a2"), { t: "stage", itemId: "a" }, T0).error?.code).toBe("not_your_call");
+    expect(room.command(asPlayer("A", "a1"), { t: "stage", itemId: "a" }, T0).error).toBeNull();
   });
 
   it("shows teammates their own side's staging, and hides it from the other", () => {
@@ -272,7 +287,7 @@ describe("who leads a side", () => {
     for (const m of room.projection(asPlayer("A", "a1"), T0).lobby.members) {
       room.command({ role: "player", team: m.team, memberId: m.id }, { t: "ready", ready: true }, T0);
     }
-    room.command(asPlayer("A", "a1"), { t: "stage", heroId: "a" }, T0);
+    room.command(asPlayer("A", "a1"), { t: "stage", itemId: "a" }, T0);
     expect(room.projection(asPlayer("A", "a3"), T0).staged).toEqual(["a"]);
     expect(room.projection(asPlayer("B", "b2"), T0).staged).toBeNull();
     expect(room.projection(SPECTATOR, T0).staged).toEqual(["a"]);
@@ -289,34 +304,34 @@ describe("commands", () => {
     play(room, T0 + 5_000, "f");
     expect(room.phase).toBe("complete");
     // No turn to wake for; the one alarm left is the clear-out, a month away.
-    expect(room.clock(T0 + 6_000)).toBeNull();
+    expect(room.clock()).toBeNull();
     expect(room.alarmAt()).toBe(room.snapshot.completedAt! + 30 * 24 * 60 * 60_000);
   });
 
   it("rejects a spectator trying to act", () => {
     const room = liveRoom();
-    expect(room.command(SPECTATOR, { t: "stage", heroId: "a" }, T0).error?.code).toBe("not_a_player");
+    expect(room.command(SPECTATOR, { t: "stage", itemId: "a" }, T0).error?.code).toBe("not_a_player");
   });
 
   it("rejects the captain who is not on the clock", () => {
     const room = liveRoom();
-    expect(room.command(CAPTAIN_B, { t: "stage", heroId: "a" }, T0).error?.code).toBe("wrong_team");
+    expect(room.command(CAPTAIN_B, { t: "stage", itemId: "a" }, T0).error?.code).toBe("wrong_team");
   });
 
   it("rejects an illegal hero without disturbing the draft", () => {
     const room = liveRoom();
     play(room, T0 + 1_000, "a");
-    const result = room.command(CAPTAIN_B, { t: "stage", heroId: "a" }, T0 + 2_000);
-    expect(result.error?.code).toBe("hero_banned");
-    expect(room.snapshot.draft.staged).toEqual([]);
+    const result = room.command(CAPTAIN_B, { t: "stage", itemId: "a" }, T0 + 2_000);
+    expect(result.error?.code).toBe("item_removed");
+    expect(room.snapshot.draft.staged).toEqual({});
   });
 
   it("emits committed actions, never staging", () => {
     const room = liveRoom();
-    const staged = room.command(CAPTAIN_A, { t: "stage", heroId: "a" }, T0 + 1_000);
+    const staged = room.command(CAPTAIN_A, { t: "stage", itemId: "a" }, T0 + 1_000);
     expect(staged.events).toEqual([]);
     const confirmed = room.command(CAPTAIN_A, { t: "confirm" }, T0 + 2_000);
-    expect(confirmed.events[0]).toMatchObject({ type: "ban", team: "A", heroes: ["a"], auto: false });
+    expect(confirmed.events[0]).toMatchObject({ type: "choice", action: "ban", team: "A", items: ["a"], auto: false });
   });
 
   it("treats resync as a no-op that still gets a fresh view", () => {
@@ -337,7 +352,7 @@ describe("the clock", () => {
     const room = liveRoom();
     const deadline = room.alarmAt()!;
     const outcome = room.tick(deadline + 5_000);
-    expect(outcome.events[0]).toMatchObject({ type: "ban", team: "A", auto: true });
+    expect(outcome.events[0]).toMatchObject({ type: "choice", action: "ban", team: "A", auto: true });
     expect(room.snapshot.timer.turnStartedAt).toBe(deadline);
     expect(room.snapshot.timer.bank.A).toBe(0);
   });
@@ -346,7 +361,7 @@ describe("the clock", () => {
     const room = liveRoom();
     const outcome = room.tick(T0 + 10 * 60_000);
     expect(room.phase).toBe("complete");
-    expect(outcome.events.filter((e) => e.type === "pick" || e.type === "ban")).toHaveLength(5);
+    expect(outcome.events.filter((e) => e.type === "choice")).toHaveLength(5);
     expect(outcome.events.at(-1)?.type).toBe("draftComplete");
   });
 
@@ -362,22 +377,28 @@ describe("the clock", () => {
   it("will not let a late click beat an expiry that already happened", () => {
     const room = liveRoom();
     const deadline = room.alarmAt()!;
-    const result = room.command(CAPTAIN_A, { t: "stage", heroId: "a" }, deadline + 1);
+    const result = room.command(CAPTAIN_A, { t: "stage", itemId: "a" }, deadline + 1);
     // A's ban was resolved by the clock; the click lands on B's turn instead.
-    expect(result.events[0]).toMatchObject({ type: "ban", auto: true });
+    expect(result.events[0]).toMatchObject({ type: "choice", action: "ban", auto: true });
     expect(result.error?.code).toBe("wrong_team");
   });
 
   it("gives each turn its own fresh per-turn time", () => {
     const room = liveRoom();
     play(room, T0 + 10_000, "a");
-    expect(room.clock(T0 + 10_000)?.expiresAt).toBe(T0 + 10_000 + 90_000);
+    expect(room.clock()?.deadlines).toEqual({ B: T0 + 10_000 + 90_000 });
+  });
+
+  it("gives a turn with its own time that time, instead of the room's", () => {
+    const room = liveRoom({ script: script("Aban, Bpick x2 @45s, Apick") });
+    play(room, T0 + 10_000, "a");
+    expect(room.clock()).toMatchObject({ allowanceMs: 45_000, deadlines: { B: T0 + 10_000 + 45_000 + 60_000 } });
   });
 
   it("stops the clock when the draft completes", () => {
     const room = liveRoom();
     room.tick(T0 + 10 * 60_000);
-    expect(room.clock(T0 + 10 * 60_000)).toBeNull();
+    expect(room.clock()).toBeNull();
     // The turn clock is done; what remains is the room's own clear-out.
     expect(room.disposable(T0 + 10 * 60_000)).toBeNull();
     expect(room.alarmAt()).toBeGreaterThan(T0 + 29 * 24 * 60 * 60_000);
@@ -387,12 +408,12 @@ describe("the clock", () => {
 describe("audience", () => {
   it("gives each connection a view filtered by its token", () => {
     const room = liveRoom();
-    room.command(CAPTAIN_A, { t: "stage", heroId: "a" }, T0 + 1_000);
+    room.command(CAPTAIN_A, { t: "stage", itemId: "a" }, T0 + 1_000);
     const views = new Map([...room.audience(T0 + 1_000)].map((entry) => [entry.connectionId, entry.projection]));
     expect(views.get("c-a1")?.staged).toEqual(["a"]);
     expect(views.get("c-s1")?.staged).toEqual(["a"]);
     expect(views.get("c-b1")?.staged).toBeNull();
-    expect(views.get("c-b1")?.stagedCount).toBe(1);
+    expect(views.get("c-b1")?.stagedCount).toEqual({ A: 1 });
   });
 
   it("reports connection state to everyone", () => {
@@ -429,15 +450,21 @@ describe("persistence", () => {
 });
 
 describe("defaults", () => {
-  it("uses the 5v5 standard script and the full roster when nothing is specified", () => {
-    const room = new Room(Room.create({}, T0));
-    expect(room.snapshot.draft.config.script).toHaveLength(10);
-    expect(room.snapshot.draft.config.heroPool.length).toBeGreaterThan(50);
+  it("falls back to the default clock, and works out how many players a side has", () => {
+    const { teamSize: _unused, ...rest } = snapshotOptions();
+    const room = new Room(Room.create(rest, T0));
     expect(room.snapshot.rules).toEqual(DEFAULT_TIMER_RULES);
+    expect(room.snapshot.roster.teamSize).toBe(2);
   });
 
   it("refuses to create a room whose script the pool cannot satisfy", () => {
-    expect(() => Room.create({ heroPool: ["a", "b"] }, T0)).toThrow(/Cannot create room/);
+    expect(() => Room.create({ ...snapshotOptions(), pool: ["a", "b"] }, T0)).toThrow(/Cannot create room/);
+  });
+
+  it("refuses credentials that leave a team without a code", () => {
+    expect(() =>
+      Room.create({ ...snapshotOptions(), credentials: { codes: { A: "AAAAAA" }, spectator: "s" } }, T0),
+    ).toThrow(/every team needs a code/);
   });
 });
 
@@ -445,12 +472,17 @@ describe("parseClientMessage", () => {
   it("accepts the four commands", () => {
     expect(parseClientMessage('{"t":"confirm"}')).toEqual({ t: "confirm" });
     expect(parseClientMessage('{"t":"resync"}')).toEqual({ t: "resync" });
-    expect(parseClientMessage('{"t":"stage","heroId":"ozo"}')).toEqual({ t: "stage", heroId: "ozo" });
-    expect(parseClientMessage('{"t":"unstage","heroId":"ozo"}')).toEqual({ t: "unstage", heroId: "ozo" });
+    expect(parseClientMessage('{"t":"stage","itemId":"ozo"}')).toEqual({ t: "stage", itemId: "ozo" });
+    expect(parseClientMessage('{"t":"unstage","itemId":"ozo"}')).toEqual({ t: "unstage", itemId: "ozo" });
+    expect(parseClientMessage('{"t":"suggest","itemId":"ozo","intent":"pick"}')).toEqual({
+      t: "suggest",
+      itemId: "ozo",
+      intent: "pick",
+    });
   });
 
   it("returns null for anything else rather than throwing", () => {
-    for (const raw of ["", "null", "[]", "not json", '{"t":"drop_table"}', '{"t":"stage"}', '{"t":"stage","heroId":7}']) {
+    for (const raw of ["", "null", "[]", "not json", '{"t":"drop_table"}', '{"t":"stage"}', '{"t":"stage","itemId":7}']) {
       expect(parseClientMessage(raw)).toBeNull();
     }
   });
@@ -482,6 +514,12 @@ describe("option validation", () => {
     expect(parseTimerRules(Number.NaN, undefined).rules).toEqual(DEFAULT_TIMER_RULES);
   });
 
+  it("falls back to a game's own clock when it has one", () => {
+    const own = { perTurnMs: 60_000, bankMs: 120_000 };
+    expect(parseTimerRules(undefined, undefined, own).rules).toEqual(own);
+    expect(parseTimerRules(45_000, undefined, own).rules).toEqual({ perTurnMs: 45_000, bankMs: 120_000 });
+  });
+
   it("only accepts the two auto-fill strategies", () => {
     expect(parseAutoFill("random")).toBe("random");
     expect(parseAutoFill("lowestIndex")).toBe("lowestIndex");
@@ -497,10 +535,10 @@ describe("a command that changes nothing must not swallow the clock", () => {
   it("reports the tick's changes even when the sender is a spectator", () => {
     const room = liveRoom();
     const deadline = room.alarmAt()!;
-    const outcome = room.command(SPECTATOR, { t: "stage", heroId: "a" }, deadline + 1);
+    const outcome = room.command(SPECTATOR, { t: "stage", itemId: "a" }, deadline + 1);
 
     expect(outcome.error?.code).toBe("not_a_player");
-    expect(outcome.events[0]).toMatchObject({ type: "ban", auto: true });
+    expect(outcome.events[0]).toMatchObject({ type: "choice", action: "ban", auto: true });
     expect(outcome.changed).toBe(true);
   });
 
@@ -672,5 +710,125 @@ describe("clearing rooms out", () => {
     const room = new Room(snapshot({ abandonAfterMs: 60_000, retentionMs: 5 * 60_000 }));
     expect(room.alarmAt()).toBe(T0 + 60_000);
     expect(room.disposable(T0 + 61_000)).toBe("abandoned");
+  });
+});
+
+describe("a turn two teams play at once", () => {
+  const blindRoom = (): Room => liveRoom({ script: script("A+B ban, Apick, Bpick") });
+
+  it("waits for both, then reveals both, and starts the next turn from the second", () => {
+    const room = blindRoom();
+    playAs(room, CAPTAIN_B, T0 + 5_000, "a");
+    expect(room.snapshot.draft.committed).toEqual([]);
+    // B is done; only A's clock is still running.
+    expect(room.clock()?.deadlines).toEqual({ A: T0 + 90_000 });
+    expect(room.projection(SPECTATOR, T0 + 5_000).locked).toEqual(["B"]);
+
+    const outcome = room.command(CAPTAIN_A, { t: "stage", itemId: "b" }, T0 + 40_000);
+    expect(outcome.events).toEqual([]);
+    const revealed = room.command(CAPTAIN_A, { t: "confirm" }, T0 + 40_000);
+    expect(revealed.events.map((e) => e.type)).toEqual(["choice", "choice", "turnChange"]);
+    expect(room.snapshot.timer).toEqual({ turnStartedAt: T0 + 40_000, bank: { A: 50_000, B: 60_000 } });
+  });
+
+  it("runs each team's clock out separately", () => {
+    const room = blindRoom();
+    // A confirms early; B never does, and is settled at its own deadline.
+    playAs(room, CAPTAIN_A, T0 + 1_000, "a");
+    const outcome = room.tick(T0 + 90_000);
+    expect(outcome.events[1]).toMatchObject({ type: "choice", team: "B", auto: true });
+    expect(room.snapshot.draft.committed.map((s) => s.at)).toEqual([T0 + 1_000, T0 + 90_000]);
+    expect(room.snapshot.timer.turnStartedAt).toBe(T0 + 90_000);
+  });
+
+  it("refuses a team trying to change its mind once it has confirmed", () => {
+    const room = blindRoom();
+    playAs(room, CAPTAIN_A, T0 + 1_000, "a");
+    expect(room.command(CAPTAIN_A, { t: "stage", itemId: "b" }, T0 + 2_000).error?.code).toBe("already_locked");
+  });
+
+  it("shows a spectator neither team's choice until the reveal", () => {
+    const room = blindRoom();
+    room.command(CAPTAIN_A, { t: "stage", itemId: "a" }, T0 + 1_000);
+    expect(room.projection(SPECTATOR, T0 + 1_000).staged).toBeNull();
+    expect(room.projection(CAPTAIN_B, T0 + 1_000).staged).toEqual([]);
+    expect(room.projection(CAPTAIN_A, T0 + 1_000).staged).toEqual(["a"]);
+  });
+});
+
+describe("a turn nobody plays", () => {
+  it("finishes the draft on the last real turn, and is recorded as the draft's own", () => {
+    const room = liveRoom({ script: script("Aban, Bban, Apick, Bpick, remaining pick"), pool: ["a", "b", "c", "d", "e"] });
+    play(room, T0 + 1_000, "a");
+    play(room, T0 + 2_000, "b");
+    play(room, T0 + 3_000, "c");
+    play(room, T0 + 4_000, "d");
+    expect(room.phase).toBe("complete");
+    expect(room.snapshot.completedAt).toBe(T0 + 4_000);
+    expect(room.record().turns.at(-1)).toMatchObject({ team: null, items: ["e"], auto: true });
+  });
+});
+
+describe("a room of three teams", () => {
+  const THREE = [...TEAMS, { id: "C", name: "Team C" }];
+  const CAPTAIN_C: Viewer = { role: "player", team: "C", memberId: "C:c1" };
+  const threeRoom = (): Room => {
+    const room = new Room(
+      snapshot({
+        teams: THREE,
+        script: [
+          { teams: ["A"], action: "pick", count: 1 },
+          { teams: ["B"], action: "pick", count: 1 },
+          { teams: ["C"], action: "pick", count: 1 },
+        ],
+        credentials: { codes: { ...CODES, C: "CCCCCC" }, spectator: CREDS.spectator },
+      }),
+    );
+    room.attach("c-a1", room.seat("A", "a1", "Ana", T0), T0);
+    room.attach("c-b1", room.seat("B", "b1", "Ben", T0), T0);
+    return room;
+  };
+
+  it("lets the third team in with its own code", () => {
+    expect(threeRoom().authenticate("cccccc")).toBe("C");
+  });
+
+  it("waits for every team before it starts", () => {
+    const room = threeRoom();
+    room.command(CAPTAIN_A, { t: "ready", ready: true }, T0);
+    room.command(CAPTAIN_B, { t: "ready", ready: true }, T0);
+    expect(room.phase).toBe("lobby");
+    room.attach("c-c1", room.seat("C", "c1", "Cy", T0), T0);
+    room.command(CAPTAIN_C, { t: "ready", ready: true }, T0);
+    expect(room.phase).toBe("drafting");
+    expect(room.snapshot.timer.bank).toEqual({ A: 60_000, B: 60_000, C: 60_000 });
+  });
+
+  it("needs every leader to agree to begin short-handed", () => {
+    const room = threeRoom();
+    room.command(CAPTAIN_A, { t: "startAnyway", agreed: true }, T0);
+    room.command(CAPTAIN_B, { t: "startAnyway", agreed: true }, T0);
+    expect(room.canBegin()).toBe(false);
+  });
+
+  it("plays through to the end, each team in turn", () => {
+    const room = threeRoom();
+    room.attach("c-c1", room.seat("C", "c1", "Cy", T0), T0);
+    for (const captain of [CAPTAIN_A, CAPTAIN_B, CAPTAIN_C]) room.command(captain, { t: "ready", ready: true }, T0);
+    playAs(room, CAPTAIN_A, T0 + 1_000, "a");
+    playAs(room, CAPTAIN_B, T0 + 2_000, "b");
+    playAs(room, CAPTAIN_C, T0 + 3_000, "c");
+    expect(room.phase).toBe("complete");
+    expect(room.presence()).toEqual({ A: "connected", B: "connected", C: "connected" });
+  });
+});
+
+describe("suggestions", () => {
+  it("accepts any of the draft's own actions, and nothing else", () => {
+    const room = liveRoom();
+    expect(room.command(CAPTAIN_B, { t: "suggest", itemId: "c", intent: "pick" }, T0).error).toBeNull();
+    expect(room.projection(CAPTAIN_B, T0).suggestions).toEqual([{ itemId: "c", by: { pick: ["Ben"] }, total: 1 }]);
+    expect(room.command(CAPTAIN_B, { t: "suggest", itemId: "c", intent: "want" }, T0).error?.code).toBe("unknown_action");
+    expect(room.command(CAPTAIN_B, { t: "suggest", itemId: "zz", intent: "pick" }, T0).error?.code).toBe("unknown_item");
   });
 });

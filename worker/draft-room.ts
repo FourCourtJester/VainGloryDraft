@@ -51,7 +51,9 @@ export class DraftRoom implements DurableObject {
     this.#ctx = ctx;
     ctx.blockConcurrencyWhile(async () => {
       const stored = await ctx.storage.get<RoomSnapshot>(SNAPSHOT_KEY);
-      if (stored === undefined) return;
+      // A room saved by an older shape of the app cannot be read by this one.
+      // Better to say there is no such room than to run it wrongly.
+      if (stored === undefined || stored.version !== 2) return;
       this.#room = new Room(stored);
       this.#persisted = stored;
       // Connections outlive being put away, but the room's memory of who holds
@@ -166,8 +168,8 @@ export class DraftRoom implements DurableObject {
    * The finished draft as a plain record: every turn in order, who took what,
    * what the clock had to choose, and how long each side took over it.
    *
-   * A room keeps its draft indefinitely, so this answers just as well two days
-   * later as it does the moment the last hero is picked.
+   * A room keeps its draft for a month, so this answers just as well two days
+   * later as it does the moment the last choice is made.
    */
   async #record(url: URL): Promise<Response> {
     const room = this.#room!;
@@ -181,8 +183,10 @@ export class DraftRoom implements DurableObject {
       roomId: snapshot.roomId,
       createdAt: snapshot.createdAt,
       phase: room.phase,
+      game: snapshot.game,
+      teams: snapshot.draft.config.teams,
       format: formatScript(snapshot.draft.config.script),
-      mirrorPicks: snapshot.draft.config.mirrorPicks,
+      mirror: snapshot.draft.config.mirror,
       players: room.players(),
       ...room.record(),
     });
@@ -311,6 +315,8 @@ export class DraftRoom implements DurableObject {
       roomId: snapshot.roomId,
       createdAt: snapshot.createdAt,
       phase: room.phase,
+      game: snapshot.game,
+      teams: snapshot.draft.config.teams,
       format: formatScript(snapshot.draft.config.script),
       players: room.players(),
       ...room.record(),

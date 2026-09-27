@@ -83,8 +83,8 @@ fills only the empty slots, so a captain who had decided on one of the two does
 not lose it.
 
 Whether a double-pick turn should get a longer clock than a single one is a
-separate question, and open. It would mean a per-turn time on the format rather
-than one figure for the whole draft.
+separate question, and open. The format can now say so per turn (see below);
+what is open is the number.
 
 **The look comes from the supplied design; the rules do not.** A design was
 commissioned externally (Google Stitch, "Halcyon Draft HUD") and its visual
@@ -108,9 +108,52 @@ through the join, replacing the D-with-a-V-counter. Redrawn as vector rather
 than kept as the supplied image, which was a bitmap on someone else's CDN and
 would have rotted.
 
+**The engine is generic; Vainglory is one pack.** Nothing in the engine, the
+room, the worker or the screens knows which game it is running. Teams, actions,
+formats, the catalog and the default clock all come from a game's pack under
+`games/`, and a room keeps its own copy of the rules it was made with. The
+Vainglory-only state of the app is kept on the `archive/vainglory` branch.
+
+Actions are named by the game but each does one of two things — removes the
+thing for everybody, or gives it to the team that chose it — rather than being
+a scripting hook. Every draft mechanic asked for so far is one of those two
+with a different name on it, and data is far easier to check than code: a pack
+that loads is a pack the engine can run.
+
+Teams are a list of any length. Nearly every draft has two, but nothing is
+cheaper to allow than a list, and once a team is a name rather than "A" or "B"
+there is nothing left that assumes two.
+
+**A blind turn hides everything until the last team has chosen — from
+spectators too.** A spectator link is one anybody can open, captains included,
+so showing a blind choice to spectators would be showing it to the other side.
+Everyone may see *that* a team has locked in, never what. Two teams can land on
+the same thing, since neither could see the other; that is what blind means.
+Each team spends its own reserve and has its own deadline, and the turn ends
+when the last of them settles.
+
+**A turn nobody plays takes what is left, the moment the draft reaches it.**
+That is a map veto's decider. When more is left than the turn takes, it draws
+among it with the room's seed, exactly as a timed-out turn does, so it can be
+checked afterwards and never guessed beforehand.
+
+**A turn can carry its own time.** `@45s` on a turn replaces the room's
+allowance for that turn only, which is how a double pick could get longer than a
+single one if organisers decide it should.
+
+**A team's colour comes from its place, not its name.** The first team is the
+blue side and the second the red, whatever a game calls them; a third and fourth
+get colours of their own.
+
+**Rooms saved before this change are not carried over.** A saved room is a
+snapshot of the rules it was made with, and the shape of those rules changed.
+Nothing had been deployed, so there were none to carry; a room from an older
+shape now answers "no such room" rather than being run wrongly.
+
 ## Still open
 - Whether a double-pick turn gets more time on the clock than a single pick.
-  Waiting on confirmation; it needs a per-turn override on the script.
+  Waiting on confirmation. The engine can now do it — `B pick x2 @45s` — so it
+  is only a matter of writing the number into the Vainglory formats.
 - Per-hero roles and icons, pending the vgna.net export. See
   [HERO_DATA.md](HERO_DATA.md).
 - Whether hero icons are self-hosted or served from vgna.net. The importer
